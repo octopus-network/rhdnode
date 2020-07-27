@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Kulupu.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Kulupu runtime. This can be compiled with `#[no_std]`, ready for Wasm.
+//! The Cdotnode runtime. This can be compiled with `#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
-mod fee;
+//mod fee;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -42,9 +42,9 @@ use sp_api::impl_runtime_apis;
 use sp_version::RuntimeVersion;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
-use kulupu_primitives::{DOLLARS, CENTS, MILLICENTS, MICROCENTS, HOURS, DAYS, deposit};
+//use kulupu_primitives::{DOLLARS, CENTS, MILLICENTS, MICROCENTS, HOURS, DAYS, deposit};
 use transaction_payment::{TargetedFeeAdjustment, Multiplier};
-use crate::fee::WeightToFee;
+//use crate::fee::WeightToFee;
 
 // A few exports that help ease life for downstream crates.
 pub use sp_runtime::{Permill, Perbill};
@@ -107,8 +107,8 @@ pub mod opaque {
 
 /// This runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("kulupu"),
-	impl_name: create_runtime_str!("kulupu"),
+	spec_name: create_runtime_str!("cdotnode"),
+	impl_name: create_runtime_str!("cdotnode"),
 	authoring_version: 3,
 	spec_version: 5,
 	impl_version: 0,
@@ -299,28 +299,28 @@ impl transaction_payment::Trait for Runtime {
 	type FeeMultiplierUpdate = TargetedFeeAdjustment<Self, TargetBlockFullness, AdjustmentVariable, MinimumMultiplier>;
 }
 
-impl difficulty::Trait for Runtime { }
+// impl difficulty::Trait for Runtime { }
 
-impl eras::Trait for Runtime { }
+// impl eras::Trait for Runtime { }
 
-parameter_types! {
-	pub const Reward: Balance = 60 * DOLLARS;
-}
+// parameter_types! {
+// 	pub const Reward: Balance = 60 * DOLLARS;
+// }
+// 
+// impl rewards::Trait for Runtime {
+// 	type Reward = Reward;
+// }
 
-impl rewards::Trait for Runtime {
-	type Reward = Reward;
-}
-
-pub struct Author;
-impl OnUnbalanced<NegativeImbalance> for Author {
-	fn on_nonzero_unbalanced(amount: NegativeImbalance) {
-		if let Some(author) = Rewards::author() {
-			Balances::resolve_creating(&author, amount);
-		} else {
-			drop(amount);
-		}
-	}
-}
+// pub struct Author;
+// impl OnUnbalanced<NegativeImbalance> for Author {
+// 	fn on_nonzero_unbalanced(amount: NegativeImbalance) {
+// 		if let Some(author) = Rewards::author() {
+// 			Balances::resolve_creating(&author, amount);
+// 		} else {
+// 			drop(amount);
+// 		}
+// 	}
+// }
 
 parameter_types! {
 	pub const LaunchPeriod: BlockNumber = 7 * DAYS;
@@ -625,9 +625,9 @@ construct_runtime!(
 		TransactionPayment: transaction_payment::{Module, Storage},
 
 		// PoW consensus and era support.
-		Difficulty: difficulty::{Module, Call, Storage, Config},
-		Eras: eras::{Module, Call, Storage, Config<T>},
-		Rewards: rewards::{Module, Call, Inherent, Storage},
+		// Difficulty: difficulty::{Module, Call, Storage, Config},
+		// Eras: eras::{Module, Call, Storage, Config<T>},
+		// Rewards: rewards::{Module, Call, Inherent, Storage},
 
 		// Governance.
 		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
@@ -751,21 +751,21 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sp_consensus_pow::TimestampApi<Block, u64> for Runtime {
-		fn timestamp() -> u64 {
-			timestamp::Module::<Runtime>::get()
-		}
-	}
-
-	impl sp_consensus_pow::DifficultyApi<Block, kulupu_primitives::Difficulty> for Runtime {
-		fn difficulty() -> kulupu_primitives::Difficulty {
-			difficulty::Module::<Runtime>::difficulty()
-		}
-	}
-
-	impl kulupu_primitives::AlgorithmApi<Block> for Runtime {
-		fn identifier() -> [u8; 8] {
-			kulupu_primitives::ALGORITHM_IDENTIFIER
-		}
-	}
+// 	impl sp_consensus_pow::TimestampApi<Block, u64> for Runtime {
+// 		fn timestamp() -> u64 {
+// 			timestamp::Module::<Runtime>::get()
+// 		}
+// 	}
+// 
+// 	impl sp_consensus_pow::DifficultyApi<Block, kulupu_primitives::Difficulty> for Runtime {
+// 		fn difficulty() -> kulupu_primitives::Difficulty {
+// 			difficulty::Module::<Runtime>::difficulty()
+// 		}
+// 	}
+// 
+// 	impl kulupu_primitives::AlgorithmApi<Block> for Runtime {
+// 		fn identifier() -> [u8; 8] {
+// 			kulupu_primitives::ALGORITHM_IDENTIFIER
+// 		}
+// 	}
 }
