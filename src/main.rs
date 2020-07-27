@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Kulupu.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Kulupu CLI library.
+//! Cdotnode CLI library.
 
 #![warn(missing_docs)]
 
@@ -23,7 +23,7 @@ mod chain_spec;
 mod service;
 mod cli;
 mod command;
-mod eras;
+//mod eras;
 
 fn main() -> sc_cli::Result<()> {
 	command::run()

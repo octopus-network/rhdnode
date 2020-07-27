@@ -1,12 +1,12 @@
 [package]
-name = "kulupu"
+name = "cdotnode"
 version = "1.2.0"
-authors = ["Wei Tang <wei@that.world>"]
+authors = ["Wei Tang <wei@that.world>", "Daogang Tang <daogangtang@gmail.com>"]
 build = "build.rs"
 edition = "2018"
 
 [[bin]]
-name = "kulupu"
+name = "cdotnode"
 path = "src/main.rs"
 
 [dependencies]
@@ -17,29 +17,29 @@ codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-sc-cli = { path = "vendor/substrate/client/cli" }
 sp-core = { path = "vendor/substrate/primitives/core" }
 sp-timestamp = { path = "vendor/substrate/primitives/timestamp" }
+sp-inherents = { path = "vendor/substrate/primitives/inherents" }
+sp-transaction-pool = { path = "vendor/substrate/primitives/transaction-pool" }
+sp-consensus = { path = "vendor/substrate/primitives/consensus/common" }
+sp-finality-grandpa = { path = "vendor/substrate/primitives/finality-grandpa" }
+sp-runtime = { path = "vendor/substrate/primitives/runtime" }
+sc-cli = { path = "vendor/substrate/client/cli" }
 sc-executor = { path = "vendor/substrate/client/executor" }
 sc-service = { path = "vendor/substrate/client/service" }
-sp-inherents = { path = "vendor/substrate/primitives/inherents" }
 sc-transaction-pool = { path = "vendor/substrate/client/transaction-pool" }
-sp-transaction-pool = { path = "vendor/substrate/primitives/transaction-pool" }
 sc-network = { path = "vendor/substrate/client/network" }
 sc-consensus-pow = { path = "vendor/substrate/client/consensus/pow" }
-sp-consensus = { path = "vendor/substrate/primitives/consensus/common" }
 sc-consensus = { path = "vendor/substrate/client/consensus/common" }
 sc-finality-grandpa = { path = "vendor/substrate/client/finality-grandpa" }
-sp-finality-grandpa = { path = "vendor/substrate/primitives/finality-grandpa" }
 sc-client-api = { path = "vendor/substrate/client/api" }
-sp-runtime = { path = "vendor/substrate/primitives/runtime" }
 sc-basic-authorship = { path = "vendor/substrate/client/basic-authorship" }
 
-pallet-rewards = { path = "frame/rewards" }
-pallet-eras = { path = "frame/eras" }
-kulupu-pow = { path = "pow" }
-kulupu-runtime = { path = "runtime" }
-kulupu-primitives = { path = "primitives" }
+#pallet-rewards = { path = "frame/rewards" }
+#pallet-eras = { path = "frame/eras" }
+#kulupu-pow = { path = "pow" }
+cdotnode-runtime = { path = "runtime" }
+cdotnode-primitives = { path = "primitives" }
 
 [build-dependencies]
 substrate-build-script-utils = { path = "vendor/substrate/utils/build-script-utils" }
@@ -55,8 +55,11 @@ wasmtime = [
 [workspace]
 members = [
 	"runtime",
-	"pow",
-	"frame/rewards",
-	"frame/eras",
 ]
+#members = [
+#	"runtime",
+#	"pow",
+#	"frame/rewards",
+#	"frame/eras",
+#]
 exclude = ["vendor"]

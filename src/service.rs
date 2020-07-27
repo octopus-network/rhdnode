@@ -24,19 +24,19 @@ use sc_consensus::LongestChain;
 use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use sc_executor::native_executor_instance;
 use sc_network::config::DummyFinalityProofRequestBuilder;
-use kulupu_runtime::{self, opaque::Block, RuntimeApi, AccountId};
+use cdotnode_runtime::{self, opaque::Block, RuntimeApi, AccountId};
 
 pub use sc_executor::NativeExecutor;
 
 // Our native executor instance.
 native_executor_instance!(
 	pub Executor,
-	kulupu_runtime::api::dispatch,
-	kulupu_runtime::native_version,
+	cdotnode_runtime::api::dispatch,
+	cdotnode_runtime::native_version,
 );
 
 /// Inherent data provider for Kulupu.
-pub fn kulupu_inherent_data_providers(
+pub fn cdotnode_inherent_data_providers(
 	author: Option<&str>
 ) -> Result<sp_inherents::InherentDataProviders, ServiceError> {
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
@@ -48,25 +48,25 @@ pub fn kulupu_inherent_data_providers(
 			.map_err(sp_consensus::Error::InherentData)?;
 	}
 
-	if let Some(author) = author {
-		if !inherent_data_providers.has_provider(&pallet_rewards::INHERENT_IDENTIFIER) {
-			inherent_data_providers
-				.register_provider(pallet_rewards::InherentDataProvider(
-					if author.starts_with("0x") {
-						AccountId::unchecked_from(
-							H256::from_str(&author[2..]).expect("Invalid author account")
-						)
-					} else {
-						let (address, version) = AccountId::from_ss58check_with_version(author)
-							.expect("Invalid author address");
-						assert!(version == Ss58AddressFormat::KulupuAccount, "Invalid author version");
-						address
-					}.encode()
-				))
-				.map_err(Into::into)
-				.map_err(sp_consensus::Error::InherentData)?;
-		}
-	}
+// 	if let Some(author) = author {
+// 		if !inherent_data_providers.has_provider(&pallet_rewards::INHERENT_IDENTIFIER) {
+// 			inherent_data_providers
+// 				.register_provider(pallet_rewards::InherentDataProvider(
+// 					if author.starts_with("0x") {
+// 						AccountId::unchecked_from(
+// 							H256::from_str(&author[2..]).expect("Invalid author account")
+// 						)
+// 					} else {
+// 						let (address, version) = AccountId::from_ss58check_with_version(author)
+// 							.expect("Invalid author address");
+// 						assert!(version == Ss58AddressFormat::KulupuAccount, "Invalid author version");
+// 						address
+// 					}.encode()
+// 				))
+// 				.map_err(Into::into)
+// 				.map_err(sp_consensus::Error::InherentData)?;
+// 		}
+// 	}
 
 	Ok(inherent_data_providers)
 }
@@ -78,10 +78,10 @@ pub fn kulupu_inherent_data_providers(
 macro_rules! new_full_start {
 	($config:expr, $author:expr) => {{
 		let mut import_setup = None;
-		let inherent_data_providers = crate::service::kulupu_inherent_data_providers($author)?;
+		let inherent_data_providers = crate::service::cdotnode_inherent_data_providers($author)?;
 
 		let builder = sc_service::ServiceBuilder::new_full::<
-			kulupu_runtime::opaque::Block, kulupu_runtime::RuntimeApi, crate::service::Executor
+			cdotnode_runtime::opaque::Block, cdotnode_runtime::RuntimeApi, crate::service::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
 				Ok(sc_consensus::LongestChain::new(backend.clone()))
@@ -97,28 +97,29 @@ macro_rules! new_full_start {
 				))
 			})?
 			.with_import_queue(|_config, client, select_chain, _transaction_pool, spawn_task_handle, prometheus_registry| {
-				let algorithm = kulupu_pow::RandomXAlgorithm::new(client.clone());
+				// let algorithm = kulupu_pow::RandomXAlgorithm::new(client.clone());
 
-				let pow_block_import = sc_consensus_pow::PowBlockImport::new(
+				let bftml_block_import = sc_consensus_bftml::BftmlBlockImport::new(
 					client.clone(),
 					client.clone(),
-					algorithm.clone(),
+					// algorithm.clone(),
 					0,
 					select_chain,
 					inherent_data_providers.clone(),
 				);
 
-				let import_queue = sc_consensus_pow::import_queue(
-					Box::new(pow_block_import.clone()),
+				let import_queue = sc_consensus_bftml::make_import_queue(
+					Box::new(bftml_block_import.clone()),
 					None,
 					None,
-					algorithm.clone(),
+					// algorithm.clone(),
 					inherent_data_providers.clone(),
 					spawn_task_handle,
 					prometheus_registry,
 				)?;
 
-				import_setup = Some((pow_block_import, algorithm));
+				// import_setup = Some((pow_block_import, algorithm));
+				import_setup = Some((bftml_block_import));
 
 				Ok(import_queue)
 			})?;
@@ -147,17 +148,16 @@ pub fn new_full(
 		.build_full()?;
 
 	if role.is_authority() {
-		for _ in 0..threads {
+		// for _ in 0..threads {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				service.client(),
 				service.transaction_pool(),
 				None,
 			);
 
-			sc_consensus_pow::start_mine(
+			let (bftml_worker, rhd_worker) = sc_consensus_bftml::make_bftml_worker_pair(
 				Box::new(block_import.clone()),
 				service.client(),
-				algorithm.clone(),
 				proposer,
 				None,
 				round,
@@ -167,67 +167,85 @@ pub fn new_full(
 				inherent_data_providers.clone(),
 				sp_consensus::AlwaysCanAuthor,
 			);
-		}
+            
+		    service.spawn_essential_handle().spawn_blocking("bftml_worker", bftml_worker);
+		    service.spawn_essential_handle().spawn_blocking("rhd_worker", rhd_worker);
+            
+
+// 			sc_consensus_pow::start_mine(
+// 				Box::new(block_import.clone()),
+// 				service.client(),
+// 				algorithm.clone(),
+// 				proposer,
+// 				None,
+// 				round,
+// 				service.network(),
+// 				std::time::Duration::new(2, 0),
+// 				service.select_chain().map(|v| v.clone()),
+// 				inherent_data_providers.clone(),
+// 				sp_consensus::AlwaysCanAuthor,
+// 			);
+		// }
 	}
 
 	Ok(service)
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(
-	config: Configuration,
-	author: Option<&str>
-) -> Result<impl AbstractService, ServiceError> {
-	let inherent_data_providers = kulupu_inherent_data_providers(author)?;
-
-	ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
-		.with_select_chain(|_config, backend| {
-			Ok(LongestChain::new(backend.clone()))
-		})?
-		.with_transaction_pool(|builder| {
-			let fetcher = builder.fetcher()
-				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
-
-			let pool_api = sc_transaction_pool::LightChainApi::new(
-				builder.client().clone(),
-				fetcher.clone(),
-			);
-			let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
-				builder.config().transaction_pool.clone(),
-				Arc::new(pool_api),
-				builder.prometheus_registry(),
-				sc_transaction_pool::RevalidationType::Light,
-			);
-			Ok(pool)
-		})?
-		.with_import_queue_and_fprb(|_config, client, _backend, _fetcher, select_chain, _transaction_pool, spawn_task_handle, prometheus_registry| {
-			let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
-
-			let algorithm = kulupu_pow::RandomXAlgorithm::new(client.clone());
-
-			let pow_block_import = sc_consensus_pow::PowBlockImport::new(
-				client.clone(),
-				client.clone(),
-				algorithm.clone(),
-				0,
-				select_chain,
-				inherent_data_providers.clone(),
-			);
-
-			let import_queue = sc_consensus_pow::import_queue(
-				Box::new(pow_block_import.clone()),
-				None,
-				None,
-				algorithm.clone(),
-				inherent_data_providers.clone(),
-				spawn_task_handle,
-				prometheus_registry,
-			)?;
-
-			Ok((import_queue, fprb))
-		})?
-		.with_finality_proof_provider(|_client, _backend| {
-			Ok(Arc::new(()) as _)
-		})?
-		.build_light()
-}
+// pub fn new_light(
+// 	config: Configuration,
+// 	author: Option<&str>
+// ) -> Result<impl AbstractService, ServiceError> {
+// 	let inherent_data_providers = kulupu_inherent_data_providers(author)?;
+// 
+// 	ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
+// 		.with_select_chain(|_config, backend| {
+// 			Ok(LongestChain::new(backend.clone()))
+// 		})?
+// 		.with_transaction_pool(|builder| {
+// 			let fetcher = builder.fetcher()
+// 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
+// 
+// 			let pool_api = sc_transaction_pool::LightChainApi::new(
+// 				builder.client().clone(),
+// 				fetcher.clone(),
+// 			);
+// 			let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
+// 				builder.config().transaction_pool.clone(),
+// 				Arc::new(pool_api),
+// 				builder.prometheus_registry(),
+// 				sc_transaction_pool::RevalidationType::Light,
+// 			);
+// 			Ok(pool)
+// 		})?
+// 		.with_import_queue_and_fprb(|_config, client, _backend, _fetcher, select_chain, _transaction_pool, spawn_task_handle, prometheus_registry| {
+// 			let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
+// 
+// 			let algorithm = kulupu_pow::RandomXAlgorithm::new(client.clone());
+// 
+// 			let pow_block_import = sc_consensus_pow::PowBlockImport::new(
+// 				client.clone(),
+// 				client.clone(),
+// 				algorithm.clone(),
+// 				0,
+// 				select_chain,
+// 				inherent_data_providers.clone(),
+// 			);
+// 
+// 			let import_queue = sc_consensus_pow::import_queue(
+// 				Box::new(pow_block_import.clone()),
+// 				None,
+// 				None,
+// 				algorithm.clone(),
+// 				inherent_data_providers.clone(),
+// 				spawn_task_handle,
+// 				prometheus_registry,
+// 			)?;
+// 
+// 			Ok((import_queue, fprb))
+// 		})?
+// 		.with_finality_proof_provider(|_client, _backend| {
+// 			Ok(Arc::new(()) as _)
+// 		})?
+// 		.build_light()
+// }

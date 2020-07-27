@@ -26,7 +26,7 @@ pub const POLKADOT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {
-		"Kulupu"
+		"Cdotnode"
 	}
 
 	fn impl_version() -> &'static str {
@@ -42,11 +42,11 @@ impl SubstrateCli for Cli {
 	}
 
 	fn support_url() -> &'static str {
-		"https://github.com/kulupu/kulupu/issues"
+		"https://github.com/daogangtang/cdotnode/issues"
 	}
 
 	fn copyright_start_year() -> i32 {
-		2019
+		2020
 	}
 
 	fn executable_name() -> &'static str {
@@ -55,7 +55,7 @@ impl SubstrateCli for Cli {
 
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 		Ok(match id {
-			"" | "kulupu" | "mainnet" => Box::new(chain_spec::mainnet_config()),
+			// "" | "cdotnode" | "mainnet" => Box::new(chain_spec::mainnet_config()),
 			"local" => Box::new(chain_spec::local_testnet_config()),
 			"dev" => Box::new(chain_spec::development_config()),
 			path => Box::new(chain_spec::ChainSpec::from_json_file(
@@ -83,17 +83,17 @@ pub fn run() -> sc_cli::Result<()> {
 
 			{
 				let mut path = folder.clone();
-				path.push("kulupu_runtime.compact.wasm");
+				path.push("cdotnode_runtime.compact.wasm");
 				let mut file = File::create(path)?;
-				file.write_all(&kulupu_runtime::WASM_BINARY)?;
+				file.write_all(&cdotnode_runtime::WASM_BINARY)?;
 				file.flush()?;
 			}
 
 			{
 				let mut path = folder.clone();
-				path.push("kulupu_runtime.wasm");
+				path.push("cdotnode_runtime.wasm");
 				let mut file = File::create(path)?;
-				file.write_all(&kulupu_runtime::WASM_BINARY_BLOATY)?;
+				file.write_all(&cdotnode_runtime::WASM_BINARY_BLOATY)?;
 				file.flush()?;
 			}
 
@@ -112,7 +112,7 @@ pub fn run() -> sc_cli::Result<()> {
 					cli.threads.unwrap_or(1),
 					cli.round.unwrap_or(5000),
 				),
-				kulupu_runtime::VERSION
+				cdotnode_runtime::VERSION
 			)
 		},
 	}
