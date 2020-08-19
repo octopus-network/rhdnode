@@ -1,3 +1,10 @@
+use std::time::{Duration, Instant};
+use futures::future::poll_fn;
+use tokio::timer::Delay;        
+// TODO: check this
+use sp_core::sr25519::{LocalizedSignature, Pair};
+
+
 
 
 // TODO: We need define here at the front 
@@ -6,7 +13,7 @@
 // Digest
 // Signature
 // Candidate
-
+// Hash
 
 
 
@@ -142,6 +149,7 @@ pub struct Accumulator {
 	pub threshold: usize,
 	/// Current proposer/authority for this round
 	pub round_proposer: AuthorityId,
+
 	proposal: Option<Proposal>,
 	prepares: HashMap<AuthorityId, (Digest, Signature)>,
 	commits: HashMap<AuthorityId, (Digest, Signature)>,
@@ -629,8 +637,89 @@ impl<T> Sending<T> {
 
 /// Instance of Rhd engine context
 struct Context {
+	key: Arc<Pair>,
+	parent_hash: Hash,
     authorities: Vec<AuthorityId>,
     rhd_worker: Arc<&mut RhdWorker>,
+}
+
+impl Context {
+	/// Get the local authority ID.
+	fn local_id(&self) -> AuthorityId {
+	    self.key.public().into()
+    }
+
+	/// Get the digest of a candidate.
+	fn candidate_digest(&self, candidate: &Candidate) -> Digest {
+        candidate.hash()
+    }
+
+	/// Sign a message using the local authority ID.
+	/// In the case of a proposal message, it should sign on the hash and
+	/// the bytes of the proposal.
+	fn sign_local(&self, message: Message) -> LocalizedMessage {
+		sign_message(&*self.key, self.parent_hash.clone(), message)
+    }
+
+	/// Get the proposer for a given round of consensus.
+	fn round_proposer(&self, round: u32) -> AuthorityId {
+        let len = self.authorities.len();
+		let offset = round % len;
+		let proposer = self.authorities[offset as usize].clone();
+		trace!(target: "rhd", "proposer for round {} is {}", round, proposer);
+
+		proposer
+    }
+
+	/// This hook is called when we advance from current `round` to `next_round`. `proposal` is
+	/// `Some` if there was one on the current `round`.
+	fn on_advance_round(
+		&self, 
+		accumulator: &Accumulator,
+		round: u32, 
+		next_round: u32,
+		reason: AdvanceRoundReason,
+	) {
+		let _ = (accumulator, round, next_round, reason);
+
+        // TODO
+	}
+
+	/// Get the best proposal.
+	fn proposal(&self) -> impl Future<Item=Candidate, Error=()> {
+        //let ask_proposal_msg = ...;
+        self.rhd_worker.ap_tx.unbounded_send( ask_proposal_msg );
+
+        poll_fn(move || -> Poll<Candidate, ()> {
+            match self.rhd_worker.gp_rx.poll()? {
+                Async::Ready(Some(proposal)) => {
+                    Ok(Async::Ready(proposal))
+                }
+                _ => Ok(Async::NotReady)
+            }
+        })
+    }
+	/// Whether the proposal is valid.
+	fn proposal_valid(&self, proposal: Candidate) -> impl Future<Item=bool, Error=()> {
+        // now, we think it's valid and be ready 
+        poll_fn(move || -> Poll<bool, ()> {
+            Ok(Async::Ready(true))
+        })
+    }
+
+	/// Create a round timeout. The context will determine the correct timeout
+	/// length, and create a future that will resolve when the timeout is
+	/// concluded.
+	fn begin_round_timeout(&self, round: u32) -> impl Future<Item=(), Error=()> {
+        // We give timeout 10 seconds for test
+        let timeout = Duration::new(10, 0);
+        let fut = Delay::new(Instant::now() + timeout)
+            .map(|_|())
+            .map_err(|_|());
+
+        Box::new(fut)
+    }
+
 }
 
 
@@ -659,9 +748,9 @@ struct Strategy {
 	misbehavior: HashMap<AuthorityId, Misbehavior>,
 	earliest_lock_round: u32,
 
-	fetching_proposal: Option<C::CreateProposal>,
-	evaluating_proposal: Option<C::EvaluateProposal>,
-	round_timeout: Option<future::Fuse<C::RoundTimeout>>,
+	fetching_proposal: Option<impl Future<Item=Candidate, Error=()>>,
+	evaluating_proposal: Option<impl Future<Item=bool, Error=()>>,
+	round_timeout: Option<future::Fuse<impl Future<Item=(), Error=()>>>,
 }
 
 impl Strategy {
@@ -1206,11 +1295,77 @@ pub fn agree(context: Context, nodes: usize, max_faulty: usize, input: Unbounded
 	}
 }
 
+// =================== Helper ======================
 
 // get the "full BFT" threshold based on an amount of nodes and
 // a maximum faulty. if nodes == 3f + 1, then threshold == 2f + 1.
 fn bft_threshold(nodes: usize, max_faulty: usize) -> usize {
 	nodes - max_faulty
 }
+
+// actions in the signature scheme.
+#[derive(Encode)]
+enum Action {
+	Prepare(u32, Hash),
+	Commit(u32, Hash),
+	AdvanceRound(u32),
+	// signatures of header hash and full candidate are both included.
+	ProposeHeader(u32, Hash),
+	Propose(u32, Candidate),
+}
+
+/// Sign a BFT message with the given key.
+pub fn sign_message(
+	key: &Pair,
+	parent_hash: Hash
+	message: Message,
+) -> LocalizedMessage {
+	let signer = key.public();
+
+	let sign_action = |action: Action| {
+		let to_sign = localized_encode(parent_hash.clone(), action);
+
+		LocalizedSignature {
+			signer: signer.clone(),
+			signature: key.sign(&to_sign),
+		}
+	};
+
+	match message {
+		Message::Propose(r, proposal) => {
+			let header_hash = proposal.hash();
+			let action_header = Action::ProposeHeader(r as u32, header_hash.clone());
+			let action_propose = Action::Propose(r as u32, proposal.clone());
+
+			LocalizedMessage::Propose(LocalizedProposal {
+				round_number: r,
+				proposal,
+				digest: header_hash,
+				sender: signer.clone().into(),
+				digest_signature: sign_action(action_header),
+				full_signature: sign_action(action_propose),
+			})
+		}
+		Message::Vote(vote) => LocalizedMessage::Vote({
+			let action = match vote {
+				Vote::Prepare(r, h) => Action::Prepare(r as u32, h),
+				Vote::Commit(r, h) => Action::Commit(r as u32, h),
+			    Vote::AdvanceRound(r) => Action::AdvanceRound(r as u32),
+			};
+
+			LocalizedVote {
+				vote: vote,
+				sender: signer.clone().into(),
+				signature: sign_action(action),
+			}
+		})
+	}
+}
+
+// encode something in a way which is localized to a specific parent-hash
+fn localized_encode(parent_hash: Hash, value: Action) -> Vec<u8> {
+	(parent_hash, value).encode()
+}
+
 
 
