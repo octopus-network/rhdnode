@@ -1,10 +1,18 @@
 use std::time::{Duration, Instant};
 use futures::future::poll_fn;
 use tokio::timer::Delay;        
+
 // TODO: check this
-use sp_core::sr25519::{LocalizedSignature, Pair};
+// LocalizedSignature couldn't be serialized in sr25519 ???
+use sp_core::sr25519::{Pair, Public as AuthorityId, Signature, LocalizedSignature};
 
+use sp_runtime::traits::{Hash as TTHash, BlakeTwo256};
+use sp_core::H256;
 
+type Hash = H256;
+
+// Digest is hash? or hash vec?
+type Digest = H256;
 
 
 // TODO: We need define here at the front 
@@ -13,9 +21,47 @@ use sp_core::sr25519::{LocalizedSignature, Pair};
 // Digest
 // Signature
 // Candidate
-// Hash
+// Hash trait
 
 
+/// Abstraction over a block header for a substrate chain.
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+pub struct Header {
+	/// The block number.
+	pub number: u64,
+	/// The parent hash.
+	pub parent_hash: Hash,
+	/// The state trie merkle root
+	pub state_root: Hash,
+	/// The merkle root of the extrinsics.
+	pub extrinsics_root: Hash,
+	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
+	//pub digest: Digest<Hash>,
+}
+
+type Extrinsic = Vec<u8>;
+
+/// Abstraction over a substrate block.
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+pub struct Block {
+	/// The block header.
+	pub header: Header,
+	/// The accompanying extrinsics.
+	pub extrinsics: Vec<Extrinsic>,
+}
+
+// impl .hash() for Block using hash method
+impl Block {
+    pub fn hash(&self) -> Hash {
+        // calc block header's hash
+        // we can hash it by myself method, join these fileds and use BlakeTwo256::hash() to hash
+        // it, and it produce sp_core::H256.
+
+    }
+
+}
+
+type Candidate = Block;
 
 /// Justification for some state at a given round.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -651,6 +697,7 @@ impl Context {
 
 	/// Get the digest of a candidate.
 	fn candidate_digest(&self, candidate: &Candidate) -> Digest {
+        // return header's hash
         candidate.hash()
     }
 
@@ -687,7 +734,7 @@ impl Context {
 
 	/// Get the best proposal.
 	fn proposal(&self) -> impl Future<Item=Candidate, Error=()> {
-        //let ask_proposal_msg = ...;
+        // TODO: let ask_proposal_msg = ...;
         self.rhd_worker.ap_tx.unbounded_send( ask_proposal_msg );
 
         poll_fn(move || -> Poll<Candidate, ()> {
@@ -1188,7 +1235,7 @@ impl Strategy {
 /// Future that resolves upon BFT agreement for a candidate.
 #[must_use = "futures do nothing unless polled"]
 pub struct Agreement {
-    context: Arc<&mut RhdWorker>, // ???
+    context: Context, // ???
 	strategy: Strategy,
 	input: UnboundedReceiver<Communication>,
 	output: UnboundedSender<Communication>,
