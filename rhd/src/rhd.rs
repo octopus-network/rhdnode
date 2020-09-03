@@ -1,6 +1,22 @@
+use std::pin::Pin;
 use std::time::{Duration, Instant};
-use futures::future::poll_fn;
-use tokio::timer::Delay;        
+use futures::{
+    Future, Stream,
+    poll_fn,
+    task::{Context as FutureContext, Poll},
+    channel::mpsc::{self, UnboundedSender, UnboundedReceiver, Sender, Receiver},
+};
+use futures_timer::Delay;
+
+use codec::{Codec, Decode, Encode};
+
+// TODO: We need define here at the front 
+// 
+// AuthorityId
+// Digest
+// Signature
+// Candidate
+// Hash trait
 
 // TODO: check this
 // LocalizedSignature couldn't be serialized in sr25519 ???
@@ -14,14 +30,6 @@ type Hash = H256;
 // Digest is hash? or hash vec?
 type Digest = H256;
 
-
-// TODO: We need define here at the front 
-// 
-// AuthorityId
-// Digest
-// Signature
-// Candidate
-// Hash trait
 
 
 /// Abstraction over a block header for a substrate chain.
@@ -627,59 +635,59 @@ enum LocalState {
 	VoteAdvance,
 }
 
-#[derive(Debug)]
-struct Sending<T> {
-	items: VecDeque<T>,
-	flushing: bool,
-}
-
-impl<T> Sending<T> {
-	fn with_capacity(n: usize) -> Self {
-		Sending {
-			items: VecDeque::with_capacity(n),
-			flushing: false,
-		}
-	}
-
-	fn push(&mut self, item: T) {
-		self.items.push_back(item);
-	}
-
-	// process all the sends into the sink.
-	fn process_all<S: Sink<SinkItem=T>>(&mut self, sink: &mut S) -> Poll<(), S::SinkError> {
-		loop {
-			while let Some(item) = self.items.pop_front() {
-				match sink.start_send(item) {
-					Err(e) => return Err(e),
-					Ok(AsyncSink::NotReady(item)) => {
-						self.items.push_front(item);
-						break;
-					}
-					Ok(AsyncSink::Ready) => {
-						// At least one item is buffered into the sink so we must ensure
-						// that at some point we will call `poll_complete`.
-						self.flushing = true;
-					}
-				}
-			}
-
-			if self.flushing {
-				if let Async::Ready(()) = sink.poll_complete()? {
-					self.flushing = false;
-				}
-			}
-
-			match (self.flushing, self.items.len()) {
-				// Still flushing, schedule to poll later.
-				(true, _) => return Ok(Async::NotReady),
-				// Return `Ready` only if all items have been sent and flushed.
-				(false, pending) if pending == 0 => return Ok(Async::Ready(())),
-				// Flushing is complete, however there are still pending items left.
-				(false, _) => continue,
-			}
-		}
-	}
-}
+//#[derive(Debug)]
+//struct Sending<T> {
+//	items: VecDeque<T>,
+//	flushing: bool,
+//}
+//
+//impl<T> Sending<T> {
+//	fn with_capacity(n: usize) -> Self {
+//		Sending {
+//			items: VecDeque::with_capacity(n),
+//			flushing: false,
+//		}
+//	}
+//
+//	fn push(&mut self, item: T) {
+//		self.items.push_back(item);
+//	}
+//
+//	// process all the sends into the sink.
+//	fn process_all<S: Sink<SinkItem=T>>(&mut self, sink: &mut S) -> Poll<(), S::SinkError> {
+//		loop {
+//			while let Some(item) = self.items.pop_front() {
+//				match sink.start_send(item) {
+//					Err(e) => return Err(e),
+//					Ok(AsyncSink::NotReady(item)) => {
+//						self.items.push_front(item);
+//						break;
+//					}
+//					Ok(AsyncSink::Ready) => {
+//						// At least one item is buffered into the sink so we must ensure
+//						// that at some point we will call `poll_complete`.
+//						self.flushing = true;
+//					}
+//				}
+//			}
+//
+//			if self.flushing {
+//				if let Async::Ready(()) = sink.poll_complete()? {
+//					self.flushing = false;
+//				}
+//			}
+//
+//			match (self.flushing, self.items.len()) {
+//				// Still flushing, schedule to poll later.
+//				(true, _) => return Ok(Async::NotReady),
+//				// Return `Ready` only if all items have been sent and flushed.
+//				(false, pending) if pending == 0 => return Ok(Async::Ready(())),
+//				// Flushing is complete, however there are still pending items left.
+//				(false, _) => continue,
+//			}
+//		}
+//	}
+//}
 
 /// Instance of Rhd engine context
 struct Context {
@@ -729,42 +737,42 @@ impl Context {
 	) {
 		let _ = (accumulator, round, next_round, reason);
 
-        // TODO
+        // TODO: any stuff to process
 	}
 
 	/// Get the best proposal.
-	fn proposal(&self) -> impl Future<Item=Candidate, Error=()> {
-        // TODO: let ask_proposal_msg = ...;
-        self.rhd_worker.ap_tx.unbounded_send( ask_proposal_msg );
+	fn proposal(&self) -> impl Future<Output=Candidate> {
+        // 0 as tmp parameter, for I don't know which one is valid now
+        let ask_proposal_msg = BftmlChannelMsg::AskProposal(0);
+        self.rhd_worker.ap_tx.unbounded_send(ask_proposal_msg);
 
-        poll_fn(move || -> Poll<Candidate, ()> {
-            match self.rhd_worker.gp_rx.poll()? {
-                Async::Ready(Some(proposal)) => {
-                    Ok(Async::Ready(proposal))
+        poll_fn(move |cx: &mut FutureContext| -> Poll<Candidate> {
+            match Stream::poll_next(Pin::new(&mut self.rhd_worker.gp_rx), cx) {
+                Poll::Ready(Some(proposal)) => {
+                    Poll::Ready(proposal)
                 }
-                _ => Ok(Async::NotReady)
+                _ => Poll::Pending
             }
         })
     }
 	/// Whether the proposal is valid.
-	fn proposal_valid(&self, proposal: Candidate) -> impl Future<Item=bool, Error=()> {
+	fn proposal_valid(&self, proposal: Candidate) -> impl Future<Output=bool> {
         // now, we think it's valid and be ready 
-        poll_fn(move || -> Poll<bool, ()> {
-            Ok(Async::Ready(true))
+        poll_fn(move |_cx: &mut FutureContext| -> Poll<bool> {
+            Poll::Ready(true)
         })
     }
 
 	/// Create a round timeout. The context will determine the correct timeout
 	/// length, and create a future that will resolve when the timeout is
 	/// concluded.
-	fn begin_round_timeout(&self, round: u32) -> impl Future<Item=(), Error=()> {
+	fn begin_round_timeout(&self, round: u32) -> impl Future<Output=()> {
         // We give timeout 10 seconds for test
         let timeout = Duration::new(10, 0);
-        let fut = Delay::new(Instant::now() + timeout)
-            .map(|_|())
-            .map_err(|_|());
+        let fut = Delay::new(Instant::now() + timeout);
 
-        Box::new(fut)
+        //Box::new(fut)
+        fut
     }
 
 }
@@ -891,23 +899,24 @@ impl Strategy {
 	// only call within the context of a `Task`.
 	fn poll(
 		&mut self,
+        cx: &mut FutureContext,
 		context: &Context,
-		sending: &mut Sending<Communication>
+		sending: &mut UnboundedSender<Communication>
 	)
-		-> Poll<Committed, ()>
+		-> Poll<Committed>
 	{
 		let mut last_watermark = (self.current_round(), self.local_state);
 
 		// poll until either completion or state doesn't change.
 		loop {
 			trace!(target: "bft", "Polling BFT logic. State={:?}", last_watermark);
-			match self.poll_once(context, sending)? {
-				Async::Ready(x) => return Ok(Async::Ready(x)),
-				Async::NotReady => {
+			match self.poll_once(cx, context, sending) {
+				Poll::Ready(x) => return Poll::Ready(x),
+				Poll::Pending=> {
 					let new_watermark = (self.current_round(), self.local_state);
 
 					if new_watermark == last_watermark {
-						return Ok(Async::NotReady)
+						return Poll::Pending
 					} else {
 						last_watermark = new_watermark;
 					}
@@ -920,15 +929,16 @@ impl Strategy {
 	// if the round or internal round-state changes, this should be called again.
 	fn poll_once(
 		&mut self,
+        cx: &mut FutureContext,
 		context: &Context,
-		sending: &mut Sending<Communication>
+		sending: &mut UnboundedSender<Communication>
 	)
-		-> Poll<Committed, ()>
+		-> Poll<Committed>
 	{
-		self.propose(context, sending)?;
-		self.prepare(context, sending)?;
-		self.commit(context, sending);
-		self.vote_advance(context, sending)?;
+		self.propose(cx, context, sending)?;
+		self.prepare(cx, context, sending)?;
+		self.commit(cx, context, sending);
+		self.vote_advance(cx, context, sending)?;
 
 		let advance = match self.current_accumulator.state() {
 			&State::Advanced(ref p_just) => {
@@ -961,7 +971,7 @@ impl Strategy {
 					justification: just.clone()
 				};
 
-				return Ok(Async::Ready(committed))
+				return Poll::Ready(committed)
 			}
 			_ => None,
 		};
@@ -970,13 +980,14 @@ impl Strategy {
 			self.advance_to_round(context, new_round, AdvanceRoundReason::Timeout);
 		}
 
-		Ok(Async::NotReady)
+		Poll::Pending
 	}
 
 	fn propose(
 		&mut self,
+        cx: &mut FutureContext,
 		context: &Context,
-		sending: &mut Sending<Communication>
+		sending: &mut UnboundedSender<Communication>
 	)
 		-> Result<(), ()>
 	{
@@ -1004,11 +1015,11 @@ impl Strategy {
 				None => {
 					let res = self.fetching_proposal
 						.get_or_insert_with(|| context.proposal())
-						.poll()?;
+						.poll(cx);
 
 					match res {
-						Async::Ready(p) => Some(p),
-						Async::NotReady => None,
+						Poll::Ready(p) => Some(p),
+						Poll::Pending => None,
 					}
 				}
 			};
@@ -1025,7 +1036,7 @@ impl Strategy {
 
 				// broadcast the justification along with the proposal if we are locked.
 				if let Some(ref locked) = self.locked {
-					sending.push(
+					sending.unbounded_send(
 						Communication::Auxiliary(locked.justification.clone())
 					);
 				}
@@ -1039,8 +1050,9 @@ impl Strategy {
 
 	fn prepare(
 		&mut self,
+        cx: &mut FutureContext,
 		context: &Context,
-		sending: &mut Sending<Communication>
+		sending: &mut UnboundedSender<Communication>
 	)
 		-> Result<(), ()>
 	{
@@ -1063,9 +1075,9 @@ impl Strategy {
 				locked => {
 					let res = self.evaluating_proposal
 						.get_or_insert_with(|| context.proposal_valid(candidate))
-						.poll()?;
+						.poll(cx);
 
-					if let Async::Ready(valid) = res {
+					if let Poll::Ready(valid) = res {
 						self.evaluating_proposal = None;
 						self.local_state = LocalState::Prepared(valid);
 
@@ -1101,8 +1113,9 @@ impl Strategy {
 
 	fn commit(
 		&mut self,
+        _cx: &mut FutureContext,
 		context: &Context,
-		sending: &mut Sending<Communication>
+		sending: &mut UnboundedSender<Communication>
 	) {
 		// commit only if we haven't voted to advance or committed already
 		match self.local_state {
@@ -1141,8 +1154,9 @@ impl Strategy {
 
 	fn vote_advance(
 		&mut self,
+        _cx: &mut FutureContext,
 		context: &Context,
-		sending: &mut Sending<Communication>
+		sending: &mut UnboundedSender<Communication>
 	)
 		-> Result<(), ()>
 	{
@@ -1162,9 +1176,9 @@ impl Strategy {
 		let round_number = self.current_accumulator.round_number();
 		let timer_res = self.round_timeout
 			.get_or_insert_with(|| context.begin_round_timeout(round_number).fuse())
-			.poll()?;
+			.poll();
 
-		if let Async::Ready(_) = timer_res { attempt_advance = true }
+		if let Poll::Ready(_) = timer_res { attempt_advance = true }
 
 		if attempt_advance {
 			let message = Vote::AdvanceRound(
@@ -1224,28 +1238,28 @@ impl Strategy {
 		&mut self,
 		message: Message,
 		context: &Context,
-		sending: &mut Sending<Communication>
+		sending: &mut UnboundedSender<Communication>
 	) {
 		let signed_message = context.sign_local(message);
 		self.import_message(context, signed_message.clone());
-		sending.push(Communication::Consensus(signed_message));
+		sending.unbounded_send(Communication::Consensus(signed_message));
 	}
 }
 
 /// Future that resolves upon BFT agreement for a candidate.
 #[must_use = "futures do nothing unless polled"]
 pub struct Agreement {
-    context: Context, // ???
+    context: Context,
 	strategy: Strategy,
 	input: UnboundedReceiver<Communication>,
 	output: UnboundedSender<Communication>,
 	concluded: Option<Committed>,
-	sending: Sending<Communication>,
+	// sending: Sending<Communication>,
 }
 
 impl Agreement {
 	/// Get a reference to the underlying context.
-	pub fn context(&self) -> &context {
+	pub fn context(&self) -> &Context {
 		&self.context
 	}
 
@@ -1264,50 +1278,52 @@ impl Agreement {
 }
 
 impl Future for Agreement {
-	type Item = Committed;
-	type Error = ();
+	type Output = ();
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut FutureContext) -> Poll<Self::Output> {
 		// even if we've observed the conclusion, wait until all
 		// pending outgoing messages are flushed.
-		if let Some(just) = self.concluded.take() {
-			return Ok(match self.sending.process_all(&mut self.output)? {
-				Async::Ready(()) => Async::Ready(just),
-				Async::NotReady => {
-					self.concluded = Some(just);
-					Async::NotReady
-				}
-			})
-		}
+//		if let Some(just) = self.concluded.take() {
+//			return Ok(match self.sending.process_all(&mut self.output)? {
+//				Async::Ready(()) => Async::Ready(just),
+//				Async::NotReady => {
+//					self.concluded = Some(just);
+//					Async::NotReady
+//				}
+//			})
+//		}
 
 		// drive state machine as long as there are new messages.
 		let mut driving = true;
 		while driving {
-			driving = match self.input.poll()? {
-                // msg here is Option<>
-				Async::Ready(msg) => {
-                    // TODO: change this line
-					match msg.ok_or(InputStreamConcluded)? {
-						Communication::Consensus(message) => self.strategy.import_message(&self.context, message),
-						Communication::Auxiliary(lock_proof)
-							=> self.strategy.import_lock_proof(&self.context, lock_proof),
-					}
+            let ag = self.get_mut();
+            match Stream::poll_next(Pin::new(&mut ag.input), cx) {
+                Poll::ready(Some(msg)) => {
+                    // here, msg comes from te_rx/input, which was decode at caller, and originally
+                    // comes from tc_rx, 
+                    match msg {
+                        Communication::Consensus(message) => self.strategy.import_message(&self.context, message),
+                        Communication::Auxiliary(lock_proof)
+                            => self.strategy.import_lock_proof(&self.context, lock_proof),
+                    }
 
-					true
-				}
-				Async::NotReady => false,
-			};
+                    driving = true;
+                }
+                _ => driving = false,
+            }
 
 			// drive state machine after handling new input.
-			if let Async::Ready(just) = self.strategy.poll(&self.context, &mut self.sending)? {
+			if let Poll::Ready(just) = self.strategy.poll(cx, &self.context, &mut self.output) {
 				self.concluded = Some(just);
-				return self.poll();
+                // [XXX]: return recursive polling?
+				return self.poll(cx);
 			}
 		}
 
 		// make progress on flushing all pending messages.
-		let _ = self.sending.process_all(&mut self.output)?;
-		Ok(Async::NotReady)
+//		let _ = self.sending.process_all(&mut self.output)?;
+
+        Poll::Pending
 	}
 }
 
@@ -1338,7 +1354,7 @@ pub fn agree(context: Context, nodes: usize, max_faulty: usize, input: Unbounded
 		input,
 		output,
 		concluded: None,
-		sending: Sending::with_capacity(4),
+		//sending: Sending::with_capacity(4),
 	}
 }
 
@@ -1413,6 +1429,4 @@ pub fn sign_message(
 fn localized_encode(parent_hash: Hash, value: Action) -> Vec<u8> {
 	(parent_hash, value).encode()
 }
-
-
 
