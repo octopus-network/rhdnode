@@ -1,85 +1,79 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{self, Duration, Instant};
-use tokio::timer::Interval;
-
 use std::time::{Duration, Instant};
 
-use futures::future;
-use futures::prelude::*;
-use futures::sync::mpsc::{self, UnboundedSender, UnboundedReceiver};
+use futures::{
+    Future, Stream,
+    poll_fn,
+    task::{Context as FutureContext, Poll},
+    executor::LocalPool,
+    channel::mpsc::{self, UnboundedSender, UnboundedReceiver},
+};
 use parking_lot::{Mutex, RwLock};
-use tokio::runtime::TaskExecutor;
-use tokio::timer::Delay;
 
 use codec::{Codec, Decode, Encode};
 
 // dependencies on substrate
 use sp_runtime::traits::Block as BlockT;
-use sp_core::sr25519::LocalizedSignature;
 use sc_consensus_bftml::{AuthorityId, BftmlChannelMsg};
+use sp_core::sr25519::{Pair, Public as AuthorityId, Signature, LocalizedSignature};
+use sp_core::H256;
 
+type Hash = H256;
 
-// how to import LocalizedSignature ?
-// TODO: import LocalizedSignature, BlockT, AuthorityId
+mod rhd;
 
-pub type Committed<B> = rhododendron::Committed<B, <B as BlockT>::Hash, LocalizedSignature>;
-pub type Communication<B> = rhododendron::Communication<B, <B as BlockT>::Hash, AuthorityId, LocalizedSignature>;
-pub type Misbehavior<H> = rhododendron::Misbehavior<H, LocalizedSignature>;
+use rhd::{Committed, Communication, Misbehavior, Context as RhdContext};
+//pub type Misbehavior<H> = rhododendron::Misbehavior<H, LocalizedSignature>;
 //pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker>>;
 
 /// A future that resolves either when canceled (witnessing a block from the network at same height)
 /// or when agreement completes.
-pub struct RhdWorker<B> where
-    B: BlockT + Clone + Eq,
-    B::Hash: sp_std::hash::Hash,
-{
+pub struct RhdWorker {
+    key: Pair,
+    authorities: Vec<AuthorityId>,
+    parent_hash: Option<Hash>,
+
     te_tx: Option<UnboundedSender<Communication>>,     // to engine tx, used in this caller layer
     fe_rx: Option<UnboundedReceiver<Communication>>,   // from engine rx, used in this caller layer
-    cm_rx: Option<UnboundedReceiver<BftmlChannelMsg>>,
+//    cm_rx: Option<UnboundedReceiver<Committed>>,
 
     tc_rx: UnboundedReceiver<BftmlChannelMsg>,
     ts_tx: UnboundedSender<BftmlChannelMsg>,
     cb_tx: UnboundedSender<BftmlChannelMsg>,
-    ib_rx: UnboundedReceiver<BftmlChannelMsg>,
     ap_tx: UnboundedSender<BftmlChannelMsg>,
     gp_rx: UnboundedReceiver<BftmlChannelMsg>,
 
+    agreement_poller: Option<Agreement>,
+
     bft_task_running: bool,
-    timer_running: bool,
+//    timer_running: bool,
+    proposing: bool,
 }
 
 // rhd worker main poll
-impl<B> Future for RhdWorker<B> where
-    B: BlockT + Clone + Eq,
-    B::Hash: sp_std::hash::Hash,
-{
-    type Item = ();
-    type Error = ();
+impl Future for RhdWorker {
+    type Output = ();
 
-    fn poll(&mut self) -> Poll<(), ()> {
-        if !self.timer_running {
-            //[XXX]: start a task in a poll? Does it work? Need to test
-            self.start_timer();
-        }
-
+    fn poll(mut self: Pin<&mut Self>, cx: &mut FutureContext) -> Poll<Self::Output> {
         // receive protocol msg from bftml, forward it to the rhd engine
-        // [XXX]: ? need match corrent error type
-        // add this .map_err(|e|())
-        match self.tc_rx.poll()? {
-            Async::Ready(Some(msg)) => {
+        let worker = self.get_mut();
+        match Stream::poll_next(Pin::new(&mut worker.tc_rx), cx) {
+            Poll::Ready(Some(msg)) => {
                 // msg reform
                 match msg {
                     BftmlChannelMsg::GossipMsgIncoming(avec) => {
                         if self.te_tx.is_some() {
-                            // [XXX]: decode vec<u8> to type Communication<B>, does this work?
+                            // [TODO]: decode vec<u8> to type Communication<B>, does this work?
                             //let msg: Communication<B> = avec.decode();
-                            let msg: Communication<B> = Decode::decode(&mut &avec[..]).expect("GossipMsgIncoming serialized msg is corrupted.");
+                            let msg: Communication = Decode::decode(&mut &avec[..]).expect("GossipMsgIncoming serialized msg is corrupted.");
                             
                             // then forward it
                             // because te_tx here is an Option
                             // self.te_tx.unbounded_send(msg);
-                            let _ = self.te_tx.as_ref().map(|c|c.unbounded_send(msg));
+                            // [TODO]: check this write style
+                            let _ = worker.te_tx.as_ref().map(|c|c.unbounded_send(msg));
                         }
                     }
                     _ => {}
@@ -90,99 +84,102 @@ impl<B> Future for RhdWorker<B> where
         }
 
         // receive rhd engine protocol msg, forward it to bftml
-        if self.fe_rx.is_some() {
+        if worker.fe_rx.is_some() {
             // we think taking action always success
-            let c = self.fe_rx.take().unwrap();
-            match c.poll()? {
-                Async::Ready(Some(msg)) => {
+            let fe_rx = worker.fe_rx.take().unwrap();
+            match Stream::poll_next(Pin::new(&mut fe_rx), cx) {
+                Poll::Ready(Some(msg)) => {
                     // msg reform
-
                     // encode it 
-                    // [XXX]: make sure this correct?
+                    // [TODO]: make sure this correct?
                     let avec = msg.encode();
 
                     // and wrap it to BftmlChannelMsg
-                    self.ts_tx.unbounded_send(BftmlChannelMsg::GossipMsgOutgoing(avec));
+                    worker.ts_tx.unbounded_send(BftmlChannelMsg::GossipMsgOutgoing(avec));
                 }
                 _ => {}
             }
             // restore it
-            self.fe_rx = Some(c);
+            worker.fe_rx = Some(fe_rx);
         }
 
-        // imported block
-        match self.ib_rx.poll()? {
-            Async::Ready(Some(msg)) => {
-                // Nothing to do here on new design
-            }
-            _ => {}
+        if worker.agreement_poller.is_none() {
+            worker.create_agreement_poller();
         }
+        else {
+            let agreement_poller = worker.agreement_poller.take().unwrap();
+            match Future::poll(Pin::new(&mut agreement_poller), cx) {
+                Poll::Ready(Some(commit_msg)) => {
+                    // the result of poll of agreement is Committed, deal with it
+                    // cm_tx.unbounded_send(commit_msg);
+                    worker.cb_tx.unbounded_send(BftmlChannelMsg::CommitBlock(commit_msg));
 
-        // receive rhd engine block commit msg
-        if self.cm_rx.is_some() {
-            let c = self.cm_rx.take().unwrap();
-            match c.poll()? {
-                Async::Ready(Some(commit_msg)) => {
-                    // forward commit block msg to bftml
-                    self.cb_tx.unbounded_send(commit_msg);
+                    // set back
+                    arc_rhd_worker.te_tx = None;
+                    arc_rhd_worker.fe_rx = None;
+                    //arc_rhd_worker.cm_rx = None;
                 }
-                _ => {},
+                _ => {
+                    // restore it
+                    worker.agreement_poller = Some(agreement_poller);
+                }
             }
-            // restore it
-            self.cm_rx = Some(c);
+
         }
 
-        Ok(Async::NotReady)
+        Poll::Pending
     }
 }
 
-impl<B> RhdWorker<B> where
-    B: BlockT + Clone + Eq,
-    B::Hash: sp_std::hash::Hash,
-{
+impl RhdWorker {
     pub fn new(
+        key: Pair,
         authorities: Vec<AuthorityID>,
         tc_rx: UnboundedReceiver<BftmlChannelMsg>,
         ts_tx: UnboundedSender<BftmlChannelMsg>,
         cb_tx: UnboundedSender<BftmlChannelMsg>,
-        ib_rx: UnboundedReceiver<BftmlChannelMsg>,
         ap_tx: UnboundedSender<BftmlChannelMsg>,
         gp_rx: UnboundedReceiver<BftmlChannelMsg>,) -> RhdWorker {
 
         RhdWorker {
+            key,
+            authorities,
+            parent_hash: None,
+
             te_tx: None,
             fe_rx: None,
-            cm_rx: None,
+            //cm_rx: None,
 
             tc_rx,
             ts_tx,
             cb_tx,
-            ib_rx,
             ap_tx,
             gp_rx,
 
             bft_task_running: false,
-            timer_running: false,
+            proposing: false,
         }
     }
 
-    fn start_once_bft(&mut self) {
+    fn create_agreement_poller(&mut self) {
         //[XXX]: could allow clone?
         let arc_rhd_worker = Arc::new(self).clone();
 
         // TODO: where authorities come from?
         let rhd_context = RhdContext {
-            authorities: authorities,
-            rhd_worker: arc_rhd_worker,
+            key: self.key,
+            parent_hash: self.parent_hash,
+            authorities: self.authorities.clone(),
+            rhd_worker: arc_rhd_worker.clone(),
         };
 
-        let (te_tx, te_rx): (UnboundedSender<Communication<B>>, UnboundedReceiver<Communication<B>>) = mpsc::unbounded();
-        let (fe_tx, fe_rx): (UnboundedSender<Communication<B>>, UnboundedReceiver<Communication<B>>) = mpsc::unbounded();
-        let (cm_tx, cm_rx): (UnboundedSender<BftmlChannelMsg>, UnboundedReceiver<BftmlChannelMsg>) = mpsc::unbounded();
+        let (te_tx, te_rx) = mpsc::unbounded::<Communication>();
+        let (fe_tx, fe_rx) = mpsc::unbounded::<Communication>();
+        //let (cm_tx, cm_rx) = mpsc::unbounded::<Committed>();
 
-        let n = authorities.len();
+        let n = self.authorities.len();
         let max_faulty = n / 3 as u32;
-        let mut agreement = rhododendron::agree(
+        let mut agreement = rhd::agree(
             rhd_context,
             n,
             max_faulty,
@@ -192,158 +189,37 @@ impl<B> RhdWorker<B> where
 
         self.te_tx = Some(te_tx);
         self.fe_rx = Some(fe_rx);
-        self.cm_rx = Some(cm_rx);
-
-        tokio::spawn(futures::future::poll_fn(move || -> Poll<(), ()> {
-            //[XXX]: could use like this here? this is a cloned arc 
-            arc_rhd_worker.bft_task_running = true;
-
-            match agreement.poll()? {
-                Async::Ready(Some(commit_msg)) => {
-                    // the result of poll of agreement is Committed<>, deal with it
-                    // fit it into BftmlChannelMsg
-                    cm_tx.unbounded_send(commit_msg);
-
-                    // set back
-                    arc_rhd_worker.bft_task_running = false;
-                    arc_rhd_worker.te_tx = None;
-                    arc_rhd_worker.fe_rx = None;
-                    arc_rhd_worker.cm_rx = None;
-
-                    // [TODO]: when this finish, it's better to notify the outer to start next block bft round
-                    // do it later
-
-                    return Ok(Async::Ready);
-                }
-                _ => Ok(Async::NotReady),
-            }
-
-            Ok(Async::NotReady)
-        }));
+        self.agreement_poller = Some(agreement);
     }
 
-    // start the ticks to advance the bft round
-    fn start_timer(&mut self) {
-        // use 10ms to check it as soon as possible
-        let task = Interval::new(Instant::now(), Duration::from_millis(10))
-            .for_each(|instant| {
-                // when no bft task exist, run one
-                if !self.bft_task_running {
-                    self.start_once_bft();
-                }
-                println!("fire; instant={:?}", instant);
-                Ok(())
-            })
-            .map_err(|e| panic!("interval errored; err={:?}", e));
-
-        tokio::spawn(task);
-        self.timer_running = true;
-    }
 }
 
-/// Instance of Rhd engine context
-struct RhdContext<B: BlockT> {
-    //    key: Arc<ed25519::Pair>,
-    authorities: Vec<AuthorityId>,
-    rhd_worker: Arc<RhdWorker>,
-    //    parent_hash: B::Hash,
-    //    round_timeout_multiplier: u64,
-    //    cache: Arc<Mutex<RoundCache<B::Hash>>>,
+pub struct RhdService {
+    inner_worker: RhdWorker
 }
 
-impl<B: BlockT> rhododendron::Context for RhdContext<B> where
-    B: Clone + Eq,
-    B::Hash: sp_std::hash::Hash,
-{
-    type Error = P::Error;
-    type AuthorityId = AuthorityId;
-    type Digest = B::Hash;
-    type Signature = LocalizedSignature;
-    type Candidate = B;
-    type RoundTimeout = Box<Future<Item = (), Error = Self::Error>>;
-    type CreateProposal = <P::Create as IntoFuture>::Future;
-    type EvaluateProposal = <P::Evaluate as IntoFuture>::Future;
 
-    fn local_id(&self) -> AuthorityId {
-        self.key.public().into()
-    }
+impl Future for RhdService {
+    type Output = ();
 
-    fn proposal(&self) -> Self::CreateProposal {
-        //let ask_proposal_msg = ...;
-        self.rhd_worker.ap_tx.unbounded_send( ask_proposal_msg );
+    fn poll(mut self: Pin<&mut Self>, cx: &mut FutureContext) -> Poll<Self::Output> {
+        let service = self.get_mut();
 
-        poll_fn(move || {
-            match self.rhd_worker.gp_rx.poll()? {
-                Async::Ready(Some(proposal)) => {
-                    Async::Ready(proposal)
-                }
-                _ => {}
+        match Future::poll(Pin::new(&mut service.inner_worker), cx) {
+            Poll::ready(()) => {
             }
-        })
-    }
-
-    fn candidate_digest(&self, proposal: &B) -> B::Hash {
-        proposal.hash()
-    }
-
-    fn sign_local(&self, message: RhdMessage<B, B::Hash>) -> LocalizedMessage<B> {
-        sign_message(message, &*self.key, self.parent_hash.clone())
-    }
-
-    fn round_proposer(&self, round: u32) -> AuthorityId {
-        //self.proposer.round_proposer(round, &self.authorities[..])
-    }
-
-    fn proposal_valid(&self, proposal: &B) -> Self::EvaluateProposal {
-        //self.proposer.evaluate(proposal).into_future()
-        poll_fn(move || Async::Ready(true))
-    }
-
-    fn begin_round_timeout(&self, round: u32) -> Self::RoundTimeout {
-        let timeout = self.round_timeout_duration(round);
-        let fut = Delay::new(Instant::now() + timeout)
-            .map_err(|e| Error::from(CommonErrorKind::FaultyTimer(e)))
-            .map_err(Into::into);
-
-        Box::new(fut)
-    }
-
-    fn on_advance_round(
-        &self,
-        accumulator: &rhododendron::Accumulator<B, B::Hash, Self::AuthorityId, Self::Signature>,
-        round: u32,
-        next_round: u32,
-        reason: AdvanceRoundReason,
-        ) {
-        use std::collections::HashSet;
-
-        let collect_pubkeys = |participants: HashSet<&Self::AuthorityId>| {
-            participants
-                .into_iter()
-                .map(|p| ::ed25519::Public::from_raw(p.0))
-                .collect::<Vec<_>>()
-        };
-
-        let round_timeout = self.round_timeout_duration(next_round);
-        debug!(target: "rhd", "Advancing to round {} from {}", next_round, round);
-        debug!(target: "rhd", "Participating authorities: {:?}",
-               collect_pubkeys(accumulator.participants()));
-        debug!(target: "rhd", "Voting authorities: {:?}",
-               collect_pubkeys(accumulator.voters()));
-        debug!(target: "rhd", "Round {} should end in at most {} seconds from now", next_round, round_timeout.as_secs());
-
-        self.update_round_cache(next_round);
-
-        if let AdvanceRoundReason::Timeout = reason {
-            self.proposer
-                .on_round_end(round, accumulator.proposal().is_some());
+            _ => {}
         }
+
+        Poll::Pending
     }
+
 }
 
-use sc_bftml::gen;
 
-//
+
+use sc_consensus_bftml::gen;
+
 // We must use some basic types defined in Substrate, imported and use here
 // We can specify and wrap all these types in bftml, and import them from bftml module
 // to reduce noise on your eye
@@ -385,13 +261,19 @@ pub fn make_rhd_worker_pair<B, E, I>(
         ap_rx,
         gp_tx,);
 
-    let rhd_worker = RhdWorker::new(
+    let mut rhd_worker = RhdWorker::new(
         tc_rx,
         ts_tx,
         cb_tx,
         ib_rx,
         ap_tx,
         gp_rx,);
+    rhd_worker.create_agreement_poller();
 
-    Ok((bftml_worker, rhd_worker))
+    let service = RhdService {
+        inner_worker: rhd_worker
+    }
+
+    Ok((bftml_worker, rhd_service))
 }
+

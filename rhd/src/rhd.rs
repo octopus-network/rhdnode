@@ -58,15 +58,16 @@ pub struct Block {
 	pub extrinsics: Vec<Extrinsic>,
 }
 
-// impl .hash() for Block using hash method
+// [TODO]: impl .hash() for Block using hash method
 impl Block {
     pub fn hash(&self) -> Hash {
         // calc block header's hash
         // we can hash it by myself method, join these fileds and use BlakeTwo256::hash() to hash
         // it, and it produce sp_core::H256.
 
+        // tmp return for test
+        BlakeTwo256::hash(&[1,2,3,4,5,6,7,8])
     }
-
 }
 
 type Candidate = Block;
@@ -691,8 +692,8 @@ enum LocalState {
 
 /// Instance of Rhd engine context
 struct Context {
-	key: Arc<Pair>,
-	parent_hash: Hash,
+	key: Pair,
+	parent_hash: Option<Hash>,
     authorities: Vec<AuthorityId>,
     rhd_worker: Arc<&mut RhdWorker>,
 }
@@ -1176,7 +1177,7 @@ impl Strategy {
 		let round_number = self.current_accumulator.round_number();
 		let timer_res = self.round_timeout
 			.get_or_insert_with(|| context.begin_round_timeout(round_number).fuse())
-			.poll();
+			.poll(); // TODO: fix using poll.
 
 		if let Poll::Ready(_) = timer_res { attempt_advance = true }
 
@@ -1278,7 +1279,7 @@ impl Agreement {
 }
 
 impl Future for Agreement {
-	type Output = ();
+	type Output = Option<Committed>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut FutureContext) -> Poll<Self::Output> {
 		// even if we've observed the conclusion, wait until all
@@ -1314,9 +1315,10 @@ impl Future for Agreement {
 
 			// drive state machine after handling new input.
 			if let Poll::Ready(just) = self.strategy.poll(cx, &self.context, &mut self.output) {
-				self.concluded = Some(just);
+				self.concluded = Some(just.clone());
                 // [XXX]: return recursive polling?
-				return self.poll(cx);
+				// return self.poll(cx);
+                return Poll::Ready(Some(just));
 			}
 		}
 
