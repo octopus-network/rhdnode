@@ -746,6 +746,7 @@ impl Context {
         // 0 as tmp parameter, for I don't know which one is valid now
         let ask_proposal_msg = BftmlChannelMsg::AskProposal(0);
         self.rhd_worker.ap_tx.unbounded_send(ask_proposal_msg);
+        self.rhd_worker.proposing = true;
 
         poll_fn(move |cx: &mut FutureContext| -> Poll<Candidate> {
             match Stream::poll_next(Pin::new(&mut self.rhd_worker.gp_rx), cx) {

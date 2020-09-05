@@ -47,8 +47,6 @@ pub struct RhdWorker {
 
     agreement_poller: Option<Agreement>,
 
-    bft_task_running: bool,
-//    timer_running: bool,
     proposing: bool,
 }
 
@@ -106,7 +104,9 @@ impl Future for RhdWorker {
         if worker.agreement_poller.is_none() {
             worker.create_agreement_poller();
         }
-        else {
+        
+        if worker.agreement_poller.is_some() {
+            // asure unwrap always works
             let agreement_poller = worker.agreement_poller.take().unwrap();
             match Future::poll(Pin::new(&mut agreement_poller), cx) {
                 Poll::Ready(Some(commit_msg)) => {
@@ -117,15 +117,15 @@ impl Future for RhdWorker {
                     // set back
                     arc_rhd_worker.te_tx = None;
                     arc_rhd_worker.fe_rx = None;
-                    //arc_rhd_worker.cm_rx = None;
+                    arc_rhd_worker.agreement_poller = None;
                 }
                 _ => {
                     // restore it
                     worker.agreement_poller = Some(agreement_poller);
                 }
             }
-
         }
+
 
         Poll::Pending
     }
@@ -148,7 +148,6 @@ impl RhdWorker {
 
             te_tx: None,
             fe_rx: None,
-            //cm_rx: None,
 
             tc_rx,
             ts_tx,
@@ -156,7 +155,6 @@ impl RhdWorker {
             ap_tx,
             gp_rx,
 
-            bft_task_running: false,
             proposing: false,
         }
     }
@@ -175,7 +173,6 @@ impl RhdWorker {
 
         let (te_tx, te_rx) = mpsc::unbounded::<Communication>();
         let (fe_tx, fe_rx) = mpsc::unbounded::<Communication>();
-        //let (cm_tx, cm_rx) = mpsc::unbounded::<Committed>();
 
         let n = self.authorities.len();
         let max_faulty = n / 3 as u32;
@@ -194,30 +191,6 @@ impl RhdWorker {
 
 }
 
-pub struct RhdService {
-    inner_worker: RhdWorker
-}
-
-
-impl Future for RhdService {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut FutureContext) -> Poll<Self::Output> {
-        let service = self.get_mut();
-
-        match Future::poll(Pin::new(&mut service.inner_worker), cx) {
-            Poll::ready(()) => {
-            }
-            _ => {}
-        }
-
-        Poll::Pending
-    }
-
-}
-
-
-
 use sc_consensus_bftml::gen;
 
 // We must use some basic types defined in Substrate, imported and use here
@@ -227,14 +200,8 @@ pub fn make_rhd_worker_pair<B, E, I>(
     client: E,
     block_import: I,
     proposer_factory: E::Proposer,
-    imported_block_rx: UnboundedReceiver<BlockImportParams>,
-    ) -> Result<
-(
-    impl futures01::Future<Item = (), Error = ()>,
-    impl futures01::Future<Item = (), Error = ()>,
-    ),
-    sp_consensus::Error,
-    >
+    imported_block_rx: UnboundedReceiver<BftProposal>,
+    ) -> Result<(impl Future<Output = ()>, impl Future<Output = ()>), sp_consensus::Error>
     where
     B: BlockT,
     E: Environment<B, Error = Error> + Send + Sync,
@@ -245,7 +212,6 @@ pub fn make_rhd_worker_pair<B, E, I>(
     // generate channels
     let (tc_tx, tc_rx, ts_tx, ts_rx) = gen::gen_consensus_msg_channels();
     let (cb_tx, cb_rx) = gen::gen_commit_block_channel();
-    let (ib_tx, ib_rx) = gen::gen_import_block_channel();
     let (ap_tx, ap_rx) = gen::gen_ask_proposal_channel();
     let (gp_tx, gp_rx) = gen::gen_give_proposal_channel();
 
@@ -268,12 +234,9 @@ pub fn make_rhd_worker_pair<B, E, I>(
         ib_rx,
         ap_tx,
         gp_rx,);
+
     rhd_worker.create_agreement_poller();
 
-    let service = RhdService {
-        inner_worker: rhd_worker
-    }
-
-    Ok((bftml_worker, rhd_service))
+    Ok((bftml_worker, rhd_worker))
 }
 
