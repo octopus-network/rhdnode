@@ -1,6 +1,6 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{self, Duration, Instant};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use futures::{
@@ -33,8 +33,6 @@ type Hash = H256;
 mod rhd;
 
 use rhd::{Committed, Communication, Misbehavior, Context as RhdContext};
-//pub type Misbehavior<H> = rhododendron::Misbehavior<H, LocalizedSignature>;
-//pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker>>;
 
 /// A future that resolves either when canceled (witnessing a block from the network at same height)
 /// or when agreement completes.

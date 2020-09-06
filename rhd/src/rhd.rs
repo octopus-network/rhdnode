@@ -636,59 +636,6 @@ enum LocalState {
 	VoteAdvance,
 }
 
-//#[derive(Debug)]
-//struct Sending<T> {
-//	items: VecDeque<T>,
-//	flushing: bool,
-//}
-//
-//impl<T> Sending<T> {
-//	fn with_capacity(n: usize) -> Self {
-//		Sending {
-//			items: VecDeque::with_capacity(n),
-//			flushing: false,
-//		}
-//	}
-//
-//	fn push(&mut self, item: T) {
-//		self.items.push_back(item);
-//	}
-//
-//	// process all the sends into the sink.
-//	fn process_all<S: Sink<SinkItem=T>>(&mut self, sink: &mut S) -> Poll<(), S::SinkError> {
-//		loop {
-//			while let Some(item) = self.items.pop_front() {
-//				match sink.start_send(item) {
-//					Err(e) => return Err(e),
-//					Ok(AsyncSink::NotReady(item)) => {
-//						self.items.push_front(item);
-//						break;
-//					}
-//					Ok(AsyncSink::Ready) => {
-//						// At least one item is buffered into the sink so we must ensure
-//						// that at some point we will call `poll_complete`.
-//						self.flushing = true;
-//					}
-//				}
-//			}
-//
-//			if self.flushing {
-//				if let Async::Ready(()) = sink.poll_complete()? {
-//					self.flushing = false;
-//				}
-//			}
-//
-//			match (self.flushing, self.items.len()) {
-//				// Still flushing, schedule to poll later.
-//				(true, _) => return Ok(Async::NotReady),
-//				// Return `Ready` only if all items have been sent and flushed.
-//				(false, pending) if pending == 0 => return Ok(Async::Ready(())),
-//				// Flushing is complete, however there are still pending items left.
-//				(false, _) => continue,
-//			}
-//		}
-//	}
-//}
 
 /// Instance of Rhd engine context
 struct Context {
@@ -1261,7 +1208,6 @@ pub struct Agreement {
 	input: UnboundedReceiver<Communication>,
 	output: UnboundedSender<Communication>,
 	concluded: Option<Committed>,
-	// sending: Sending<Communication>,
 }
 
 impl Agreement {
@@ -1288,18 +1234,6 @@ impl Future for Agreement {
 	type Output = Option<Committed>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut FutureContext) -> Poll<Self::Output> {
-		// even if we've observed the conclusion, wait until all
-		// pending outgoing messages are flushed.
-//		if let Some(just) = self.concluded.take() {
-//			return Ok(match self.sending.process_all(&mut self.output)? {
-//				Async::Ready(()) => Async::Ready(just),
-//				Async::NotReady => {
-//					self.concluded = Some(just);
-//					Async::NotReady
-//				}
-//			})
-//		}
-
 		// drive state machine as long as there are new messages.
 		let mut driving = true;
 		while driving {
@@ -1327,9 +1261,6 @@ impl Future for Agreement {
                 return Poll::Ready(Some(just));
 			}
 		}
-
-		// make progress on flushing all pending messages.
-//		let _ = self.sending.process_all(&mut self.output)?;
 
         Poll::Pending
 	}
@@ -1362,7 +1293,6 @@ pub fn agree(context: Context, nodes: usize, max_faulty: usize, input: Unbounded
 		input,
 		output,
 		concluded: None,
-		//sending: Sending::with_capacity(4),
 	}
 }
 
