@@ -1015,14 +1015,13 @@ impl Strategy {
 					self.notable_candidates.get(locked.digest()).cloned()
 				}
 				None => {
-					let res = self.fetching_proposal
-						.get_or_insert_with(|| context.proposal())
-						.poll(cx);
-
-					match res {
+					let _ = self.fetching_proposal
+						.get_or_insert_with(|| context.proposal());
+                    
+                    match Future::poll(Pin::new(&mut self.fetching_proposal), cx) {
 						Poll::Ready(p) => Some(p),
 						Poll::Pending => None,
-					}
+                    }
 				}
 			};
 
@@ -1075,28 +1074,30 @@ impl Strategy {
 			match &mut self.locked {
 				&mut Some(ref locked) if locked.digest() != &digest => {}
 				locked => {
-					let res = self.evaluating_proposal
-						.get_or_insert_with(|| context.proposal_valid(candidate))
-						.poll(cx);
+					let _ = self.evaluating_proposal
+						.get_or_insert_with(|| context.proposal_valid(candidate));
 
-					if let Poll::Ready(valid) = res {
-						self.evaluating_proposal = None;
-						self.local_state = LocalState::Prepared(valid);
+                    match Future::poll(Pin::new(&mut self.evaluating_proposal), cx) {
+                        Poll::Ready(valid) => {
+                            self.evaluating_proposal = None;
+                            self.local_state = LocalState::Prepared(valid);
 
-						if valid {
-							prepare_for = Some(digest);
-						} else {
-							// if the locked block is bad, unlock from it and
-							// refuse to lock to anything prior to it.
-							if locked.as_ref().map_or(false, |locked| locked.digest() == &digest) {
-								*locked = None;
-								self.earliest_lock_round = ::std::cmp::max(
-									self.current_accumulator.round_number(),
-									self.earliest_lock_round,
-								);
-							}
-						}
-					}
+                            if valid {
+                                prepare_for = Some(digest);
+                            } else {
+                                // if the locked block is bad, unlock from it and
+                                // refuse to lock to anything prior to it.
+                                if locked.as_ref().map_or(false, |locked| locked.digest() == &digest) {
+                                    *locked = None;
+                                    self.earliest_lock_round = ::std::cmp::max(
+                                        self.current_accumulator.round_number(),
+                                        self.earliest_lock_round,
+                                        );
+                                }
+                            }
+                        },
+                        _ => {}
+                    }
 				}
 			}
 		}
@@ -1156,7 +1157,7 @@ impl Strategy {
 
 	fn vote_advance(
 		&mut self,
-        _cx: &mut FutureContext,
+        cx: &mut FutureContext,
 		context: &Context,
 		sending: &mut UnboundedSender<Communication>
 	)
@@ -1176,11 +1177,15 @@ impl Strategy {
 
 		// if the timeout has fired, vote to advance round.
 		let round_number = self.current_accumulator.round_number();
-		let timer_res = self.round_timeout
-			.get_or_insert_with(|| context.begin_round_timeout(round_number).fuse())
-			.poll(); // TODO: fix using poll.
+		let _ = self.round_timeout
+			.get_or_insert_with(|| context.begin_round_timeout(round_number).fuse());
 
-		if let Poll::Ready(_) = timer_res { attempt_advance = true }
+        match Future::poll(Pin::new(&mut self.round_timeout), cx) {
+            Poll::Ready() => {
+                attempt_advance = true;
+            },
+            _ => {}
+        }
 
 		if attempt_advance {
 			let message = Vote::AdvanceRound(

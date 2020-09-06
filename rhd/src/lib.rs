@@ -123,9 +123,11 @@ impl Future for RhdWorker {
                     worker.cb_tx.unbounded_send(BftmlChannelMsg::CommitBlock(commit_msg));
 
                     // set back
-                    arc_rhd_worker.te_tx = None;
-                    arc_rhd_worker.fe_rx = None;
-                    arc_rhd_worker.agreement_poller = None;
+                    worker.te_tx = None;
+                    worker.fe_rx = None;
+                    //worker.agreement_poller = None;
+                    // continue next agreement/consensus
+                    worker.create_agreement_poller();
                 }
                 _ => {
                     // restore it
