@@ -1,6 +1,6 @@
 use sp_runtime::Perbill;
 use frame_support::weights::{WeightToFeePolynomial, WeightToFeeCoefficient, WeightToFeeCoefficients};
-use kulupu_primitives::CENTS;
+use cdotnode_primitives::CENTS;
 use smallvec::smallvec;
 use crate::{Balance, ExtrinsicBaseWeight};
 

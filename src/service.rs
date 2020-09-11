@@ -79,6 +79,7 @@ macro_rules! new_full_start {
 	($config:expr, $author:expr) => {{
 		let mut import_setup = None;
 		let inherent_data_providers = crate::service::cdotnode_inherent_data_providers($author)?;
+        let (imported_block_tx, imported_block_rx) = sc_consensus_bftml::gen::imported_block_channel();
 
 		let builder = sc_service::ServiceBuilder::new_full::<
 			cdotnode_runtime::opaque::Block, cdotnode_runtime::RuntimeApi, crate::service::Executor
@@ -102,24 +103,23 @@ macro_rules! new_full_start {
 				let bftml_block_import = sc_consensus_bftml::BftmlBlockImport::new(
 					client.clone(),
 					client.clone(),
-					// algorithm.clone(),
-					0,
 					select_chain,
 					inherent_data_providers.clone(),
+					0,
+                    imported_block_tx,
 				);
 
 				let import_queue = sc_consensus_bftml::make_import_queue(
 					Box::new(bftml_block_import.clone()),
 					None,
 					None,
-					// algorithm.clone(),
 					inherent_data_providers.clone(),
 					spawn_task_handle,
 					prometheus_registry,
 				)?;
 
 				// import_setup = Some((pow_block_import, algorithm));
-				import_setup = Some((bftml_block_import));
+				import_setup = Some((bftml_block_import, imported_block_rx));
 
 				Ok(import_queue)
 			})?;
@@ -139,7 +139,7 @@ pub fn new_full(
 
 	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config, author);
 
-	let (block_import, algorithm) = import_setup.take().expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+	let (block_import, imported_block_rx) = import_setup.take().expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 	let service = builder
 		.with_finality_proof_provider(|_client, _backend| {
@@ -148,44 +148,28 @@ pub fn new_full(
 		.build_full()?;
 
 	if role.is_authority() {
-		// for _ in 0..threads {
-			let proposer = sc_basic_authorship::ProposerFactory::new(
-				service.client(),
-				service.transaction_pool(),
-				None,
-			);
+        let proposer = sc_basic_authorship::ProposerFactory::new(
+            service.client(),
+            service.transaction_pool(),
+            None,
+            );
 
-			let (bftml_worker, rhd_worker) = sc_consensus_bftml::make_bftml_worker_pair(
-				Box::new(block_import.clone()),
-				service.client(),
-				proposer,
-				None,
-				round,
-				service.network(),
-				std::time::Duration::new(2, 0),
-				service.select_chain().map(|v| v.clone()),
-				inherent_data_providers.clone(),
-				sp_consensus::AlwaysCanAuthor,
-			);
-            
-		    service.spawn_essential_handle().spawn_blocking("bftml_worker", bftml_worker);
-		    service.spawn_essential_handle().spawn_blocking("rhd_worker", rhd_worker);
-            
+        let (bftml_worker, rhd_worker) = rhd::make_rhd_worker_pair(
+            service.client(),
+            Box::new(block_import.clone()),
+            proposer,
+            service.network(),
+            imported_block_rx,
+            service.network(),
+            service.select_chain().map(|v| v.clone()),
+            inherent_data_providers.clone(),
+            sp_consensus::AlwaysCanAuthor,
+            key: Default::default(),   // TODO: fill this
+            authorities: Vec::new(),    // TODO: fill this
+            );
 
-// 			sc_consensus_pow::start_mine(
-// 				Box::new(block_import.clone()),
-// 				service.client(),
-// 				algorithm.clone(),
-// 				proposer,
-// 				None,
-// 				round,
-// 				service.network(),
-// 				std::time::Duration::new(2, 0),
-// 				service.select_chain().map(|v| v.clone()),
-// 				inherent_data_providers.clone(),
-// 				sp_consensus::AlwaysCanAuthor,
-// 			);
-		// }
+        service.spawn_essential_handle().spawn_blocking("bftml_worker", bftml_worker);
+        service.spawn_essential_handle().spawn_blocking("rhd_worker", rhd_worker);
 	}
 
 	Ok(service)

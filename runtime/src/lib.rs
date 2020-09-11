@@ -20,7 +20,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
-//mod fee;
+mod fee;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -42,9 +42,9 @@ use sp_api::impl_runtime_apis;
 use sp_version::RuntimeVersion;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
-//use kulupu_primitives::{DOLLARS, CENTS, MILLICENTS, MICROCENTS, HOURS, DAYS, deposit};
+use cdotnode_primitives::{DOLLARS, CENTS, MILLICENTS, MICROCENTS, HOURS, DAYS, deposit};
 use transaction_payment::{TargetedFeeAdjustment, Multiplier};
-//use crate::fee::WeightToFee;
+use crate::fee::WeightToFee;
 
 // A few exports that help ease life for downstream crates.
 pub use sp_runtime::{Permill, Perbill};
@@ -243,7 +243,7 @@ parameter_types! {
 impl timestamp::Trait for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
-	type OnTimestampSet = Difficulty;
+	//type OnTimestampSet = Difficulty;
 	type MinimumPeriod = MinimumPeriod;
 }
 
@@ -311,16 +311,17 @@ impl transaction_payment::Trait for Runtime {
 // 	type Reward = Reward;
 // }
 
-// pub struct Author;
-// impl OnUnbalanced<NegativeImbalance> for Author {
-// 	fn on_nonzero_unbalanced(amount: NegativeImbalance) {
-// 		if let Some(author) = Rewards::author() {
-// 			Balances::resolve_creating(&author, amount);
-// 		} else {
-// 			drop(amount);
-// 		}
-// 	}
-// }
+pub struct Author;
+impl OnUnbalanced<NegativeImbalance> for Author {
+	fn on_nonzero_unbalanced(amount: NegativeImbalance) {
+//		if let Some(author) = Rewards::author() {
+//			Balances::resolve_creating(&author, amount);
+//		} else {
+//			drop(amount);
+//		}
+        drop(amount);
+	}
+}
 
 parameter_types! {
 	pub const LaunchPeriod: BlockNumber = 7 * DAYS;

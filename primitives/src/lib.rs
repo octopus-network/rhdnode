@@ -73,8 +73,8 @@ pub const DAYS: u32 = 24 * HOURS;
 
 pub const ALGORITHM_IDENTIFIER: [u8; 8] = *b"randomx1";
 
-decl_runtime_apis! {
-	pub trait AlgorithmApi {
-		fn identifier() -> [u8; 8];
-	}
-}
+// decl_runtime_apis! {
+// 	pub trait AlgorithmApi {
+// 		fn identifier() -> [u8; 8];
+// 	}
+// }

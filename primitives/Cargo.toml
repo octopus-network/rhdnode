@@ -1,13 +1,13 @@
 [package]
-name = "kulupu-primitives"
+name = "cdotnode-primitives"
 version = "1.2.0"
 authors = ["Wei Tang <wei@that.world>"]
 edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-core = { path = "../vendor/substrate/primitives/core", default-features = false }
-sp-api = { path = "../vendor/substrate/primitives/api", default-features = false }
+sp-core = { path = "../../substrate/primitives/core", default-features = false }
+sp-api = { path = "../../substrate/primitives/api", default-features = false }
 
 [features]
 default = ["std"]

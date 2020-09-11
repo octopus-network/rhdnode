@@ -17,32 +17,35 @@ codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-sp-core = { path = "vendor/substrate/primitives/core" }
-sp-timestamp = { path = "vendor/substrate/primitives/timestamp" }
-sp-inherents = { path = "vendor/substrate/primitives/inherents" }
-sp-transaction-pool = { path = "vendor/substrate/primitives/transaction-pool" }
-sp-consensus = { path = "vendor/substrate/primitives/consensus/common" }
-sp-finality-grandpa = { path = "vendor/substrate/primitives/finality-grandpa" }
-sp-runtime = { path = "vendor/substrate/primitives/runtime" }
-sc-cli = { path = "vendor/substrate/client/cli" }
-sc-executor = { path = "vendor/substrate/client/executor" }
-sc-service = { path = "vendor/substrate/client/service" }
-sc-transaction-pool = { path = "vendor/substrate/client/transaction-pool" }
-sc-network = { path = "vendor/substrate/client/network" }
-sc-consensus-pow = { path = "vendor/substrate/client/consensus/pow" }
-sc-consensus = { path = "vendor/substrate/client/consensus/common" }
-sc-finality-grandpa = { path = "vendor/substrate/client/finality-grandpa" }
-sc-client-api = { path = "vendor/substrate/client/api" }
-sc-basic-authorship = { path = "vendor/substrate/client/basic-authorship" }
+sp-core = { path = "../substrate/primitives/core" }
+sp-timestamp = { path = "../substrate/primitives/timestamp" }
+sp-inherents = { path = "../substrate/primitives/inherents" }
+sp-transaction-pool = { path = "../substrate/primitives/transaction-pool" }
+sp-consensus = { path = "../substrate/primitives/consensus/common" }
+sp-finality-grandpa = { path = "../substrate/primitives/finality-grandpa" }
+sp-runtime = { path = "../substrate/primitives/runtime" }
+sc-cli = { path = "../substrate/client/cli" }
+sc-executor = { path = "../substrate/client/executor" }
+sc-service = { path = "../substrate/client/service" }
+sc-transaction-pool = { path = "../substrate/client/transaction-pool" }
+sc-network = { path = "../substrate/client/network" }
+sc-consensus-bftml = { path = "../substrate/client/consensus/bftml" }
+sc-consensus = { path = "../substrate/client/consensus/common" }
+sc-finality-grandpa = { path = "../substrate/client/finality-grandpa" }
+sc-client-api = { path = "../substrate/client/api" }
+sc-basic-authorship = { path = "../substrate/client/basic-authorship" }
 
 #pallet-rewards = { path = "frame/rewards" }
 #pallet-eras = { path = "frame/eras" }
 #kulupu-pow = { path = "pow" }
-cdotnode-runtime = { path = "runtime" }
+#kulupu-primitives = { path = "primitives" }
+
+rhd = {path = "../rhd"}
 cdotnode-primitives = { path = "primitives" }
+cdotnode-runtime = { path = "runtime" }
 
 [build-dependencies]
-substrate-build-script-utils = { path = "vendor/substrate/utils/build-script-utils" }
+substrate-build-script-utils = { path = "../substrate/utils/build-script-utils" }
 
 [features]
 default = []

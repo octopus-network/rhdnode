@@ -1,5 +1,5 @@
 [package]
-name = "kulupu-runtime"
+name = "cdotnode-runtime"
 version = "1.2.0"
 authors = ["Wei Tang <wei@that.world>"]
 edition = "2018"
@@ -7,46 +7,46 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-sp-std = { path = "../vendor/substrate/primitives/std", default-features = false }
-sp-io = { path = "../vendor/substrate/primitives/io", default-features = false }
-sp-version = { path = "../vendor/substrate/primitives/version", default-features = false }
-sp-core = { path = "../vendor/substrate/primitives/core", default-features = false }
-sp-runtime = { path = "../vendor/substrate/primitives/runtime", default-features = false }
-sp-offchain = { path = "../vendor/substrate/primitives/offchain", default-features = false }
-sp-consensus-pow = { path = "../vendor/substrate/primitives/consensus/pow", default-features = false }
-sp-session = { path = "../vendor/substrate/primitives/session", default-features = false }
-sp-api = { path = "../vendor/substrate/primitives/api", default-features = false }
-sp-block-builder = { path = "../vendor/substrate/primitives/block-builder", default-features = false }
-sp-transaction-pool = { path = "../vendor/substrate/primitives/transaction-pool", default-features = false }
-sp-inherents = { path = "../vendor/substrate/primitives/inherents", default-features = false }
-frame-support = { path = "../vendor/substrate/frame/support", default-features = false }
-frame-executive = { path = "../vendor/substrate/frame/executive", default-features = false }
-kulupu-primitives = { path = "../primitives", default-features = false }
+sp-std = { path = "../../substrate/primitives/std", default-features = false }
+sp-io = { path = "../../substrate/primitives/io", default-features = false }
+sp-version = { path = "../../substrate/primitives/version", default-features = false }
+sp-core = { path = "../../substrate/primitives/core", default-features = false }
+sp-runtime = { path = "../../substrate/primitives/runtime", default-features = false }
+sp-offchain = { path = "../../substrate/primitives/offchain", default-features = false }
+sp-consensus-pow = { path = "../../substrate/primitives/consensus/pow", default-features = false }
+sp-session = { path = "../../substrate/primitives/session", default-features = false }
+sp-api = { path = "../../substrate/primitives/api", default-features = false }
+sp-block-builder = { path = "../../substrate/primitives/block-builder", default-features = false }
+sp-transaction-pool = { path = "../../substrate/primitives/transaction-pool", default-features = false }
+sp-inherents = { path = "../../substrate/primitives/inherents", default-features = false }
+frame-support = { path = "../../substrate/frame/support", default-features = false }
+frame-executive = { path = "../../substrate/frame/executive", default-features = false }
+cdotnode-primitives = { path = "../primitives", default-features = false }
 smallvec = "1.4.0"
 
-system = { package = "frame-system", path = "../vendor/substrate/frame/system", default-features = false }
-balances = { package = "pallet-balances", path = "../vendor/substrate/frame/balances", default-features = false }
-utility = { package = "pallet-utility", path = "../vendor/substrate/frame/utility", default-features = false }
-indices = { package = "pallet-indices", path = "../vendor/substrate/frame/indices", default-features = false }
-timestamp = { package = "pallet-timestamp", path = "../vendor/substrate/frame/timestamp", default-features = false }
-transaction-payment = { package = "pallet-transaction-payment", path = "../vendor/substrate/frame/transaction-payment", default-features = false }
-randomness-collective-flip = { package = "pallet-randomness-collective-flip", path = "../vendor/substrate/frame/randomness-collective-flip", default-features = false }
-democracy = { package = "pallet-democracy", path = "../vendor/substrate/frame/democracy", default-features = false }
-collective = { package = "pallet-collective", path = "../vendor/substrate/frame/collective", default-features = false }
-elections-phragmen = { package = "pallet-elections-phragmen", path = "../vendor/substrate/frame/elections-phragmen", default-features = false }
-membership = { package = "pallet-membership", path = "../vendor/substrate/frame/membership", default-features = false }
-treasury = { package = "pallet-treasury", path = "../vendor/substrate/frame/treasury", default-features = false }
-scheduler = { package = "pallet-scheduler", path = "../vendor/substrate/frame/scheduler", default-features = false }
-identity = { package = "pallet-identity", path = "../vendor/substrate/frame/identity", default-features = false }
-proxy = { package = "pallet-proxy", path = "../vendor/substrate/frame/proxy", default-features = false }
-vesting = { package = "pallet-vesting", path = "../vendor/substrate/frame/vesting", default-features = false }
-multisig = { package = "pallet-multisig", path = "../vendor/substrate/frame/multisig", default-features = false }
-rewards = { package = "pallet-rewards", path = "../frame/rewards", default-features = false }
-eras = { package = "pallet-eras", path = "../frame/eras", default-features = false }
-difficulty = { package = "pallet-difficulty", path = "../frame/difficulty", default-features = false }
+system = { package = "frame-system", path = "../../substrate/frame/system", default-features = false }
+balances = { package = "pallet-balances", path = "../../substrate/frame/balances", default-features = false }
+utility = { package = "pallet-utility", path = "../../substrate/frame/utility", default-features = false }
+indices = { package = "pallet-indices", path = "../../substrate/frame/indices", default-features = false }
+timestamp = { package = "pallet-timestamp", path = "../../substrate/frame/timestamp", default-features = false }
+transaction-payment = { package = "pallet-transaction-payment", path = "../../substrate/frame/transaction-payment", default-features = false }
+randomness-collective-flip = { package = "pallet-randomness-collective-flip", path = "../../substrate/frame/randomness-collective-flip", default-features = false }
+democracy = { package = "pallet-democracy", path = "../../substrate/frame/democracy", default-features = false }
+collective = { package = "pallet-collective", path = "../../substrate/frame/collective", default-features = false }
+elections-phragmen = { package = "pallet-elections-phragmen", path = "../../substrate/frame/elections-phragmen", default-features = false }
+membership = { package = "pallet-membership", path = "../../substrate/frame/membership", default-features = false }
+treasury = { package = "pallet-treasury", path = "../../substrate/frame/treasury", default-features = false }
+scheduler = { package = "pallet-scheduler", path = "../../substrate/frame/scheduler", default-features = false }
+identity = { package = "pallet-identity", path = "../../substrate/frame/identity", default-features = false }
+proxy = { package = "pallet-proxy", path = "../../substrate/frame/proxy", default-features = false }
+vesting = { package = "pallet-vesting", path = "../../substrate/frame/vesting", default-features = false }
+multisig = { package = "pallet-multisig", path = "../../substrate/frame/multisig", default-features = false }
+#rewards = { package = "pallet-rewards", path = "../frame/rewards", default-features = false }
+#eras = { package = "pallet-eras", path = "../frame/eras", default-features = false }
+#difficulty = { package = "pallet-difficulty", path = "../frame/difficulty", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.5", path = "../vendor/substrate/utils/wasm-builder-runner" }
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../substrate/utils/wasm-builder-runner" }
 
 [features]
 default = ["std"]
@@ -67,7 +67,6 @@ std = [
 	"sp-inherents/std",
 	"frame-support/std",
 	"frame-executive/std",
-	"kulupu-primitives/std",
 
 	"system/std",
 	"balances/std",
@@ -86,7 +85,4 @@ std = [
 	"proxy/std",
 	"vesting/std",
 	"multisig/std",
-	"rewards/std",
-	"eras/std",
-	"difficulty/std",
 ]
