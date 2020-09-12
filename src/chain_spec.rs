@@ -98,7 +98,7 @@ fn testnet_genesis(initial_difficulty: U256) -> GenesisConfig {
 	}
 }
 
-/// Swamp bottom genesis config generation.
+// /// Swamp bottom genesis config generation.
 // #[allow(unused)]
 // pub fn mainnet_genesis() -> GenesisConfig {
 // 	let era_state = crate::eras::era0_state();
