@@ -26,7 +26,7 @@ mod fee;
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use sp_std::prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 use codec::{Encode, Decode};
 use sp_core::{OpaqueMetadata, u32_trait::{_1, _2, _4, _5, _9, _10}};
 use sp_runtime::{
@@ -42,8 +42,9 @@ use sp_api::impl_runtime_apis;
 use sp_version::RuntimeVersion;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
-use cdotnode_primitives::{DOLLARS, CENTS, MILLICENTS, MICROCENTS, HOURS, DAYS, deposit};
+use cdotnode_primitives::{DOLLARS, CENTS, MILLICENTS, MICROCENTS, HOURS, DAYS, BLOCK_TIME, deposit};
 use transaction_payment::{TargetedFeeAdjustment, Multiplier};
+use system::EnsureRoot;
 use crate::fee::WeightToFee;
 
 // A few exports that help ease life for downstream crates.
@@ -190,6 +191,8 @@ impl system::Trait for Runtime {
 	type OnKilledAccount = ();
 	/// The data to be stored in an account.
 	type AccountData = balances::AccountData<Balance>;
+	/// System weight info.
+	type SystemWeightInfo = ();
 }
 
 impl scheduler::Trait for Runtime {
@@ -197,6 +200,9 @@ impl scheduler::Trait for Runtime {
 	type Origin = Origin;
 	type Call = Call;
 	type MaximumWeight = MaximumBlockWeight;
+	type PalletsOrigin = OriginCaller;
+	type ScheduleOrigin = EnsureRoot<AccountId>;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -214,11 +220,13 @@ impl multisig::Trait for Runtime {
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
 	type MaxSignatories = MaxSignatories;
+	type WeightInfo = ();
 }
 
 impl utility::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -234,6 +242,8 @@ impl indices::Trait for Runtime {
 	type Currency = Balances;
 	/// The ubiquitous event type.
 	type Event = Event;
+	/// Weight info for indices.
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -243,8 +253,9 @@ parameter_types! {
 impl timestamp::Trait for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
-	//type OnTimestampSet = Difficulty;
+	type OnTimestampSet = Difficulty;
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -259,6 +270,7 @@ impl balances::Trait for Runtime {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 
 type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
@@ -299,27 +311,27 @@ impl transaction_payment::Trait for Runtime {
 	type FeeMultiplierUpdate = TargetedFeeAdjustment<Self, TargetBlockFullness, AdjustmentVariable, MinimumMultiplier>;
 }
 
-// impl difficulty::Trait for Runtime { }
+impl difficulty::Trait for Runtime { }
 
-// impl eras::Trait for Runtime { }
+impl eras::Trait for Runtime { }
 
-// parameter_types! {
-// 	pub const Reward: Balance = 60 * DOLLARS;
-// }
-// 
-// impl rewards::Trait for Runtime {
-// 	type Reward = Reward;
-// }
+parameter_types! {
+	pub const Reward: Balance = 60 * DOLLARS;
+}
+
+impl rewards::Trait for Runtime {
+	type Reward = Reward;
+}
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
 	fn on_nonzero_unbalanced(amount: NegativeImbalance) {
-//		if let Some(author) = Rewards::author() {
-//			Balances::resolve_creating(&author, amount);
-//		} else {
-//			drop(amount);
-//		}
-        drop(amount);
+		if let Some(author) = Rewards::author() {
+			Balances::resolve_creating(&author, amount);
+		} else {
+			drop(amount);
+		}
+//        drop(amount);
 	}
 }
 
@@ -372,11 +384,14 @@ impl democracy::Trait for Runtime {
 	type Slash = Treasury;
 	type Scheduler = Scheduler;
 	type MaxVotes = MaxVotes;
+	type PalletsOrigin = OriginCaller;
+	type WeightInfo = ();
 }
 
 parameter_types! {
 	pub const CouncilMotionDuration: BlockNumber = 3 * DAYS;
 	pub const CouncilMaxProposals: u32 = 100;
+	pub const CouncilMaxMembers: u32 = 100;
 }
 
 type CouncilCollective = collective::Instance1;
@@ -386,6 +401,8 @@ impl collective::Trait<CouncilCollective> for Runtime {
 	type Event = Event;
 	type MotionDuration = CouncilMotionDuration;
 	type MaxProposals = CouncilMaxProposals;
+    type MaxMembers = CouncilMaxMembers;
+	type WeightInfo = ();
 }
 
 /// Converter for currencies to votes.
@@ -443,11 +460,13 @@ impl elections_phragmen::Trait for Runtime {
 	type DesiredRunnersUp = DesiredRunnersUp;
 	type TermDuration = TermDuration;
 	type ModuleId = ElectionsPhragmenModuleId;
+	type WeightInfo = ();
 }
 
 parameter_types! {
 	pub const TechnicalMotionDuration: BlockNumber = 3 * DAYS;
 	pub const TechnicalMaxProposals: u32 = 100;
+	pub const TechnicalMaxMembers: u32 = 100;
 }
 
 type TechnicalCollective = collective::Instance2;
@@ -457,15 +476,17 @@ impl collective::Trait<TechnicalCollective> for Runtime {
 	type Event = Event;
 	type MotionDuration = TechnicalMotionDuration;
 	type MaxProposals = TechnicalMaxProposals;
+    type MaxMembers = TechnicalMaxMembers;
+	type WeightInfo = ();
 }
 
 impl membership::Trait<membership::Instance1> for Runtime {
 	type Event = Event;
-	type AddOrigin = collective::EnsureProportionAtLeast<_9, _10, AccountId, CouncilCollective>;
-	type RemoveOrigin = collective::EnsureProportionAtLeast<_9, _10, AccountId, CouncilCollective>;
-	type SwapOrigin = collective::EnsureProportionAtLeast<_9, _10, AccountId, CouncilCollective>;
-	type ResetOrigin = collective::EnsureProportionAtLeast<_9, _10, AccountId, CouncilCollective>;
-	type PrimeOrigin = collective::EnsureProportionAtLeast<_9, _10, AccountId, CouncilCollective>;
+	type AddOrigin = system::EnsureRoot<AccountId>;
+	type RemoveOrigin = system::EnsureRoot<AccountId>;
+	type SwapOrigin = system::EnsureRoot<AccountId>;
+	type ResetOrigin = system::EnsureRoot<AccountId>;
+	type PrimeOrigin = system::EnsureRoot<AccountId>;
 	type MembershipInitialized = TechnicalCommittee;
 	type MembershipChanged = TechnicalCommittee;
 }
@@ -474,7 +495,7 @@ parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const ProposalBondMinimum: Balance = 20 * DOLLARS;
 	pub const SpendPeriod: BlockNumber = 6 * DAYS;
-	pub const Burn: Permill = Permill::from_percent(0);
+	pub const Burn: Permill = Permill::from_percent(1);
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 
 	pub const TipCountdown: BlockNumber = 1 * DAYS;
@@ -485,8 +506,8 @@ parameter_types! {
 
 impl treasury::Trait for Runtime {
 	type Currency = Balances;
-	type ApproveOrigin = collective::EnsureProportionAtLeast<_4, _5, AccountId, CouncilCollective>;
-	type RejectOrigin = collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type ApproveOrigin = collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type RejectOrigin = collective::EnsureProportionMoreThan<_1, _5, AccountId, CouncilCollective>;
 	type Tippers = ElectionsPhragmen;
 	type TipCountdown = TipCountdown;
 	type TipFindersFee = TipFindersFee;
@@ -498,7 +519,9 @@ impl treasury::Trait for Runtime {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
+	type BurnDestination = ();
 	type ModuleId = TreasuryModuleId;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -523,6 +546,7 @@ impl identity::Trait for Runtime {
 	type MaxRegistrars = MaxRegistrars;
 	type RegistrarOrigin = system::EnsureRoot<AccountId>;
 	type ForceOrigin = system::EnsureNever<AccountId>;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -531,6 +555,9 @@ parameter_types! {
 	// Additional storage item size of 33 bytes.
 	pub const ProxyDepositFactor: Balance = deposit(0, 33);
 	pub const MaxProxies: u16 = 32;
+	pub const AnnouncementDepositBase: Balance = deposit(1, 8);
+	pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
+	pub const MaxPending: u16 = 32;
 }
 
 /// The type used to represent the kinds of proxying allowed.
@@ -598,6 +625,11 @@ impl proxy::Trait for Runtime {
 	type ProxyDepositBase = ProxyDepositBase;
 	type ProxyDepositFactor = ProxyDepositFactor;
 	type MaxProxies = MaxProxies;
+	type WeightInfo = ();
+	type MaxPending = MaxPending;
+	type CallHasher = BlakeTwo256;
+	type AnnouncementDepositBase = AnnouncementDepositBase;
+	type AnnouncementDepositFactor = AnnouncementDepositFactor;
 }
 
 parameter_types! {
@@ -609,6 +641,7 @@ impl vesting::Trait for Runtime {
 	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;
 	type MinVestedTransfer = MinVestedTransfer;
+	type WeightInfo = ();
 }
 
 construct_runtime!(
@@ -626,9 +659,9 @@ construct_runtime!(
 		TransactionPayment: transaction_payment::{Module, Storage},
 
 		// PoW consensus and era support.
-		// Difficulty: difficulty::{Module, Call, Storage, Config},
-		// Eras: eras::{Module, Call, Storage, Config<T>},
-		// Rewards: rewards::{Module, Call, Inherent, Storage},
+		Difficulty: difficulty::{Module, Call, Storage, Config},
+		Eras: eras::{Module, Call, Storage, Config<T>},
+		Rewards: rewards::{Module, Call, Inherent, Storage},
 
 		// Governance.
 		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
@@ -752,21 +785,36 @@ impl_runtime_apis! {
 		}
 	}
 
-// 	impl sp_consensus_pow::TimestampApi<Block, u64> for Runtime {
-// 		fn timestamp() -> u64 {
-// 			timestamp::Module::<Runtime>::get()
-// 		}
-// 	}
-// 
-// 	impl sp_consensus_pow::DifficultyApi<Block, kulupu_primitives::Difficulty> for Runtime {
-// 		fn difficulty() -> kulupu_primitives::Difficulty {
-// 			difficulty::Module::<Runtime>::difficulty()
-// 		}
-// 	}
-// 
-// 	impl kulupu_primitives::AlgorithmApi<Block> for Runtime {
-// 		fn identifier() -> [u8; 8] {
-// 			kulupu_primitives::ALGORITHM_IDENTIFIER
-// 		}
-// 	}
+	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+		fn account_nonce(account: AccountId) -> Index {
+			System::account_nonce(account)
+		}
+	}
+
+	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<Block, Balance> for Runtime {
+		fn query_info(
+			uxt: <Block as BlockT>::Extrinsic,
+			len: u32,
+		) -> pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo<Balance> {
+			TransactionPayment::query_info(uxt, len)
+		}
+	}
+
+ 	impl sp_consensus_pow::TimestampApi<Block, u64> for Runtime {
+ 		fn timestamp() -> u64 {
+ 			timestamp::Module::<Runtime>::get()
+ 		}
+ 	}
+ 
+ 	impl sp_consensus_pow::DifficultyApi<Block, cdotnode_primitives::Difficulty> for Runtime {
+ 		fn difficulty() -> cdotnode_primitives::Difficulty {
+ 			difficulty::Module::<Runtime>::difficulty()
+ 		}
+ 	}
+ 
+ 	impl cdotnode_primitives::AlgorithmApi<Block> for Runtime {
+ 		fn identifier() -> [u8; 8] {
+ 			cdotnode_primitives::ALGORITHM_IDENTIFIER
+ 		}
+ 	}
 }

@@ -24,7 +24,7 @@ use sp_core::U256;
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_timestamp::OnTimestampSet;
 use frame_support::{decl_storage, decl_module};
-use kulupu_primitives::{
+use cdotnode_primitives::{
 	DIFFICULTY_ADJUST_WINDOW, BLOCK_TIME_MSEC, BLOCK_TIME_WINDOW_MSEC,
 	DIFFICULTY_DAMP_FACTOR, CLAMP_FACTOR, MIN_DIFFICULTY, MAX_DIFFICULTY,
 	Difficulty,

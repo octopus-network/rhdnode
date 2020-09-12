@@ -41,9 +41,12 @@ identity = { package = "pallet-identity", path = "../../substrate/frame/identity
 proxy = { package = "pallet-proxy", path = "../../substrate/frame/proxy", default-features = false }
 vesting = { package = "pallet-vesting", path = "../../substrate/frame/vesting", default-features = false }
 multisig = { package = "pallet-multisig", path = "../../substrate/frame/multisig", default-features = false }
-#rewards = { package = "pallet-rewards", path = "../frame/rewards", default-features = false }
-#eras = { package = "pallet-eras", path = "../frame/eras", default-features = false }
-#difficulty = { package = "pallet-difficulty", path = "../frame/difficulty", default-features = false }
+rewards = { package = "pallet-rewards", path = "../frame/rewards", default-features = false }
+eras = { package = "pallet-eras", path = "../frame/eras", default-features = false }
+difficulty = { package = "pallet-difficulty", path = "../frame/difficulty", default-features = false }
+
+frame-system-rpc-runtime-api = { default-features = false, path = "../../substrate/frame/system/rpc/runtime-api/" }
+pallet-transaction-payment-rpc-runtime-api = { default-features = false, path = "../../substrate/frame/transaction-payment/rpc/runtime-api/" }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../substrate/utils/wasm-builder-runner" }
@@ -85,4 +88,9 @@ std = [
 	"proxy/std",
 	"vesting/std",
 	"multisig/std",
+	"rewards/std",
+	"eras/std",
+	"difficulty/std",
+	"frame-system-rpc-runtime-api/std",
+	"pallet-transaction-payment-rpc-runtime-api/std",
 ]

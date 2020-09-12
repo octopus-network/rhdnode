@@ -24,6 +24,7 @@ pub type Difficulty = sp_core::U256;
 
 /// Block interval, in seconds, the network will tune its next_target for.
 pub const BLOCK_TIME_SEC: u64 = 60;
+pub const BLOCK_TIME: u64 = BLOCK_TIME_SEC * 1000;
 /// Block time interval in milliseconds.
 pub const BLOCK_TIME_MSEC: u128 = BLOCK_TIME_SEC as u128 * 1000;
 
@@ -73,8 +74,8 @@ pub const DAYS: u32 = 24 * HOURS;
 
 pub const ALGORITHM_IDENTIFIER: [u8; 8] = *b"randomx1";
 
-// decl_runtime_apis! {
-// 	pub trait AlgorithmApi {
-// 		fn identifier() -> [u8; 8];
-// 	}
-// }
+decl_runtime_apis! {
+	pub trait AlgorithmApi {
+		fn identifier() -> [u8; 8];
+	}
+}
