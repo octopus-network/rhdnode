@@ -19,7 +19,7 @@ use sp_core::{U256, crypto::UncheckedFrom};
 use sc_service::ChainType;
 use cdotnode_runtime::{
 	BalancesConfig, GenesisConfig, IndicesConfig, SystemConfig,
-	// DifficultyConfig, ErasConfig, 
+	DifficultyConfig, ErasConfig, 
     AccountId, WASM_BINARY,
 };
 
@@ -83,15 +83,15 @@ fn testnet_genesis(initial_difficulty: U256) -> GenesisConfig {
 		indices: Some(IndicesConfig {
 			indices: vec![],
 		}),
-// 		difficulty: Some(DifficultyConfig {
-// 			initial_difficulty,
-// 		}),
+ 		difficulty: Some(DifficultyConfig {
+ 			initial_difficulty,
+ 		}),
 		collective_Instance1: Some(Default::default()),
 		collective_Instance2: Some(Default::default()),
 		democracy: Some(Default::default()),
 		treasury: Some(Default::default()),
 		elections_phragmen: Some(Default::default()),
-//		eras: Some(Default::default()),
+		eras: Some(Default::default()),
 		membership_Instance1: Some(Default::default()),
 		timestamp: Some(Default::default()),
 		vesting: Some(Default::default()),

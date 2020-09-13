@@ -16,41 +16,46 @@
 
 use std::{path::PathBuf, fs::File, io::Write};
 use log::info;
-use sc_cli::SubstrateCli;
+use sp_core::{hexdisplay::HexDisplay, crypto::{Pair, Ss58Codec, Ss58AddressFormat}};
+use sc_cli::{SubstrateCli, ChainSpec, Role, RuntimeVersion};
+use sc_service::{PartialComponents, config::KeystoreConfig};
+use sc_keystore::Store as Keystore;
 use crate::chain_spec;
 use crate::cli::{Cli, Subcommand};
 use crate::service;
+
+const DEFAULT_CHECK_INHERENTS_AFTER: u32 = 152650;
 
 /// URL for the telemetry server. Disabled by default.
 pub const POLKADOT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
 impl SubstrateCli for Cli {
-	fn impl_name() -> &'static str {
-		"Cdotnode"
+	fn impl_name() -> String {
+		"Cdotnode".into()
 	}
 
-	fn impl_version() -> &'static str {
-		env!("SUBSTRATE_CLI_IMPL_VERSION")
+	fn impl_version() -> String {
+		env!("SUBSTRATE_CLI_IMPL_VERSION").into()
 	}
 
-	fn description() -> &'static str {
-		env!("CARGO_PKG_DESCRIPTION")
+	fn description() -> String {
+		env!("CARGO_PKG_DESCRIPTION").into()
 	}
 
-	fn author() -> &'static str {
-		env!("CARGO_PKG_AUTHORS")
+	fn author() -> String {
+		env!("CARGO_PKG_AUTHORS").into()
 	}
 
-	fn support_url() -> &'static str {
-		"https://github.com/daogangtang/cdotnode/issues"
+	fn support_url() -> String {
+		"https://github.com/daogangtang/cdotnode/issues".into()
 	}
 
 	fn copyright_start_year() -> i32 {
 		2020
 	}
 
-	fn executable_name() -> &'static str {
-		env!("CARGO_PKG_NAME")
+	fn executable_name() -> String {
+		env!("CARGO_PKG_NAME").into()
 	}
 
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
@@ -63,6 +68,10 @@ impl SubstrateCli for Cli {
 			)?),
 		})
 	}
+
+	fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
+		&cdotnode_runtime::VERSION
+	}
 }
 
 /// Parse and run command line arguments
@@ -74,45 +83,61 @@ pub fn run() -> sc_cli::Result<()> {
 
 	match &cli.subcommand {
 		Some(Subcommand::Base(subcommand)) => {
-			let runner = cli.create_runner(subcommand)?;
-			runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config, None).0))
+			// let runner = cli.create_runner(subcommand)?;
+			// runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config, None).0))
+            Ok(())
 		},
 		Some(Subcommand::ExportBuiltinWasm(cmd)) => {
-			info!("Exporting builtin wasm binary to folder: {}", cmd.folder);
-			let folder = PathBuf::from(cmd.folder.clone());
-
-			{
-				let mut path = folder.clone();
-				path.push("cdotnode_runtime.compact.wasm");
-				let mut file = File::create(path)?;
-				file.write_all(&cdotnode_runtime::WASM_BINARY)?;
-				file.flush()?;
-			}
-
-			{
-				let mut path = folder.clone();
-				path.push("cdotnode_runtime.wasm");
-				let mut file = File::create(path)?;
-				file.write_all(&cdotnode_runtime::WASM_BINARY_BLOATY)?;
-				file.flush()?;
-			}
+//			info!("Exporting builtin wasm binary to folder: {}", cmd.folder);
+//			let folder = PathBuf::from(cmd.folder.clone());
+//
+//			{
+//				let mut path = folder.clone();
+//				path.push("cdotnode_runtime.compact.wasm");
+//				let mut file = File::create(path)?;
+//				file.write_all(&cdotnode_runtime::WASM_BINARY)?;
+//				file.flush()?;
+//			}
+//
+//			{
+//				let mut path = folder.clone();
+//				path.push("cdotnode_runtime.wasm");
+//				let mut file = File::create(path)?;
+//				file.write_all(&cdotnode_runtime::WASM_BINARY_BLOATY)?;
+//				file.flush()?;
+//			}
 
 			Ok(())
 		},
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node(
-				|config| service::new_light(
-					config,
-					cli.author.as_ref().map(|s| s.as_str())
-				),
-				|config| service::new_full(
-					config,
-					cli.author.as_ref().map(|s| s.as_str()),
-					cli.threads.unwrap_or(1),
-					cli.round.unwrap_or(5000),
-				),
-				cdotnode_runtime::VERSION
+			runner.run_node_until_exit(
+				|config| match config.role {
+					Role::Light => { 
+//                        service::new_light(
+//						config,
+//						cli.author.as_ref().map(|s| s.as_str()),
+//						cli.check_inherents_after.unwrap_or(DEFAULT_CHECK_INHERENTS_AFTER),
+//						!cli.no_donate,
+//					),
+					service::new_full(
+						config,
+						cli.author.as_ref().map(|s| s.as_str()),
+						cli.threads.unwrap_or(1),
+						cli.round.unwrap_or(5000),
+						cli.check_inherents_after.unwrap_or(DEFAULT_CHECK_INHERENTS_AFTER),
+						!cli.no_donate,
+					)
+                    }
+					_ => service::new_full(
+						config,
+						cli.author.as_ref().map(|s| s.as_str()),
+						cli.threads.unwrap_or(1),
+						cli.round.unwrap_or(5000),
+						cli.check_inherents_after.unwrap_or(DEFAULT_CHECK_INHERENTS_AFTER),
+						!cli.no_donate,
+					)
+				}
 			)
 		},
 	}

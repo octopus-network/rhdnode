@@ -674,7 +674,9 @@ dependencies = [
  "cdotnode-primitives",
  "cdotnode-runtime",
  "futures 0.3.5",
+ "jsonrpc-core",
  "log",
+ "pallet-transaction-payment-rpc",
  "parity-scale-codec",
  "rhd",
  "sc-basic-authorship",
@@ -684,11 +686,17 @@ dependencies = [
  "sc-consensus-bftml",
  "sc-executor",
  "sc-finality-grandpa",
+ "sc-keystore",
  "sc-network",
+ "sc-rpc",
+ "sc-rpc-api",
  "sc-service",
  "sc-transaction-pool",
  "serde",
  "serde_json",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
  "sp-consensus",
  "sp-core",
  "sp-finality-grandpa",
@@ -698,6 +706,7 @@ dependencies = [
  "sp-transaction-pool",
  "structopt",
  "substrate-build-script-utils",
+ "substrate-frame-rpc-system",
 ]
 
 [[package]]
@@ -3782,6 +3791,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-transaction-payment-rpc"
+version = "2.0.0-rc6"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "pallet-transaction-payment-rpc-runtime-api",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-rpc",
+ "sp-runtime",
+]
+
+[[package]]
 name = "pallet-transaction-payment-rpc-runtime-api"
 version = "2.0.0-rc6"
 dependencies = [
@@ -6600,6 +6626,28 @@ name = "substrate-build-script-utils"
 version = "2.0.0-rc6"
 dependencies = [
  "platforms",
+]
+
+[[package]]
+name = "substrate-frame-rpc-system"
+version = "2.0.0-rc6"
+dependencies = [
+ "frame-system-rpc-runtime-api",
+ "futures 0.3.5",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "log",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sc-rpc-api",
+ "serde",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-core",
+ "sp-runtime",
+ "sp-transaction-pool",
 ]
 
 [[package]]
