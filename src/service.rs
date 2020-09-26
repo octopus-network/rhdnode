@@ -206,6 +206,7 @@ pub fn new_full(
 	}
 
 	let role = config.role.clone();
+	let prometheus_registry = config.prometheus_registry().cloned();
 	let telemetry_connection_sinks = sc_service::TelemetryConnectionSinks::default();
 
 	let rpc_extensions_builder = {
@@ -237,14 +238,45 @@ pub fn new_full(
 	})?;
 
 	if role.is_authority() {
+        // authority discovery service
+		let (sentries, authority_discovery_role) = match role {
+			sc_service::config::Role::Authority { ref sentry_nodes } => (
+				sentry_nodes.clone(),
+				sc_authority_discovery::Role::Authority (
+					keystore.clone(),
+				),
+			),
+			sc_service::config::Role::Sentry {..} => (
+				vec![],
+				sc_authority_discovery::Role::Sentry,
+			),
+			_ => unreachable!("Due to outer matches! constraint; qed.")
+		};
+
+		let dht_event_stream = network.event_stream("authority-discovery")
+			.filter_map(|e| async move { match e {
+				Event::Dht(e) => Some(e),
+				_ => None,
+			}}).boxed();
+		let (authority_discovery_worker, _service) = sc_authority_discovery::new_worker_and_service(
+			client.clone(),
+			network.clone(),
+			sentries,
+			dht_event_stream,
+			authority_discovery_role,
+			prometheus_registry.clone(),
+		);
+
+		task_manager.spawn_handle().spawn("authority-discovery-worker", authority_discovery_worker);
+
         let proposer = sc_basic_authorship::ProposerFactory::new(
             client.clone(),
             transaction_pool.clone(),
             None,
             );
         
-        let key = rhd::Pair::from_seed(&[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
-        let authorities: Vec<rhd::AuthorityId> = Vec::new();
+        //let key = rhd::Pair::from_seed(&[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
+        //let authorities: Vec<rhd::AuthorityId> = Vec::new();
         let (bftml_worker, rhd_worker) = rhd::make_rhd_worker_pair(
             client.clone(),
             Box::new(bftml_block_import.clone()),
@@ -255,12 +287,14 @@ pub fn new_full(
             Some(select_chain.clone()),
             inherent_data_providers.clone(),
             sp_consensus::AlwaysCanAuthor,
-            key,   // key
-            authorities, // authorities
+            // key,   // key
+            // authorities, // authorities
+            keystore.clone(),
             ).unwrap();
 
         task_manager.spawn_essential_handle().spawn_blocking("bftml_worker", bftml_worker);
         task_manager.spawn_essential_handle().spawn_blocking("rhd_worker", rhd_worker);
+
 
 //		let author = decode_author(author);
 //		let algorithm = kulupu_pow::RandomXAlgorithm::new(
