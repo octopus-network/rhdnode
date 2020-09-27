@@ -25,6 +25,7 @@ sp-transaction-pool = { path = "../substrate/primitives/transaction-pool" }
 sp-consensus = { path = "../substrate/primitives/consensus/common" }
 sp-finality-grandpa = { path = "../substrate/primitives/finality-grandpa" }
 sp-runtime = { path = "../substrate/primitives/runtime" }
+sc-authority-discovery = {path = "../substrate/client/authority-discovery" }
 sc-cli = { path = "../substrate/client/cli" }
 sc-executor = { path = "../substrate/client/executor" }
 sc-service = { path = "../substrate/client/service" }

@@ -18,6 +18,7 @@
 
 use std::sync::Arc;
 use std::str::FromStr;
+use futures::StreamExt;
 use codec::Encode;
 use sp_runtime::{Perbill, traits::Bounded};
 use sp_core::{H256, crypto::{UncheckedFrom, Ss58Codec, Ss58AddressFormat}};
@@ -26,8 +27,9 @@ use sc_executor::native_executor_instance;
 use sc_client_api::backend::RemoteBackend;
 use cdotnode_runtime::{self, opaque::Block, RuntimeApi};
 use futures::channel::mpsc::UnboundedReceiver;
-use sc_consensus_bftml::BftProposal;
+use sc_consensus_bftml::{BftProposal, BftmlInnerMsg};
 use sp_core::Pair;
+use sc_network::{Event, NetworkService};
 
 pub use sc_executor::NativeExecutor;
 
@@ -107,7 +109,7 @@ pub fn new_partial(
 	sp_consensus::DefaultImportQueue<Block, FullClient>,
 	sc_transaction_pool::FullPool<Block, FullClient>,
 	sc_consensus_bftml::BftmlBlockImport<Block, FullClient, Arc<FullClient>, FullSelectChain>,
->, UnboundedReceiver<BftProposal>), ServiceError> {
+>, UnboundedReceiver<BftmlInnerMsg<Block>>), ServiceError> {
 	let inherent_data_providers = crate::service::cdotnode_inherent_data_providers(
 		decode_author(author),
 		donate,
@@ -238,37 +240,39 @@ pub fn new_full(
 	})?;
 
 	if role.is_authority() {
-        // authority discovery service
-		let (sentries, authority_discovery_role) = match role {
-			sc_service::config::Role::Authority { ref sentry_nodes } => (
-				sentry_nodes.clone(),
-				sc_authority_discovery::Role::Authority (
-					keystore.clone(),
-				),
-			),
-			sc_service::config::Role::Sentry {..} => (
-				vec![],
-				sc_authority_discovery::Role::Sentry,
-			),
-			_ => unreachable!("Due to outer matches! constraint; qed.")
-		};
 
-		let dht_event_stream = network.event_stream("authority-discovery")
-			.filter_map(|e| async move { match e {
-				Event::Dht(e) => Some(e),
-				_ => None,
-			}}).boxed();
-		let (authority_discovery_worker, _service) = sc_authority_discovery::new_worker_and_service(
-			client.clone(),
-			network.clone(),
-			sentries,
-			dht_event_stream,
-			authority_discovery_role,
-			prometheus_registry.clone(),
-		);
+//        // authority discovery service
+//		let (sentries, authority_discovery_role) = match role {
+//			sc_service::config::Role::Authority { ref sentry_nodes } => (
+//				sentry_nodes.clone(),
+//				sc_authority_discovery::Role::Authority (
+//					keystore.clone(),
+//				),
+//			),
+//			sc_service::config::Role::Sentry {..} => (
+//				vec![],
+//				sc_authority_discovery::Role::Sentry,
+//			),
+//			_ => unreachable!("Due to outer matches! constraint; qed.")
+//		};
+//
+//		let dht_event_stream = network.event_stream("authority-discovery")
+//			.filter_map(|e| async move { match e {
+//				Event::Dht(e) => Some(e),
+//				_ => None,
+//			}}).boxed();
+//		let (authority_discovery_worker, _service) = sc_authority_discovery::new_worker_and_service(
+//			client.clone(),
+//			network.clone(),
+//			sentries,
+//			dht_event_stream,
+//			authority_discovery_role,
+//			prometheus_registry.clone(),
+//		);
+//
+//		task_manager.spawn_handle().spawn("authority-discovery-worker", authority_discovery_worker);
 
-		task_manager.spawn_handle().spawn("authority-discovery-worker", authority_discovery_worker);
-
+        // Main consensus service
         let proposer = sc_basic_authorship::ProposerFactory::new(
             client.clone(),
             transaction_pool.clone(),

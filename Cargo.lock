@@ -679,6 +679,7 @@ dependencies = [
  "pallet-transaction-payment-rpc",
  "parity-scale-codec",
  "rhd",
+ "sc-authority-discovery",
  "sc-basic-authorship",
  "sc-cli",
  "sc-client-api",
@@ -4915,6 +4916,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-authority-discovery"
+version = "0.8.0-rc6"
+dependencies = [
+ "bytes 0.5.5",
+ "derive_more",
+ "either",
+ "futures 0.3.5",
+ "futures-timer 3.0.2",
+ "libp2p",
+ "log",
+ "parity-scale-codec",
+ "prost",
+ "prost-build",
+ "rand 0.7.3",
+ "sc-client-api",
+ "sc-keystore",
+ "sc-network",
+ "serde_json",
+ "sp-api",
+ "sp-authority-discovery",
+ "sp-blockchain",
+ "sp-core",
+ "sp-runtime",
+ "substrate-prometheus-endpoint",
+]
+
+[[package]]
 name = "sc-basic-authorship"
 version = "0.8.0-rc6"
 dependencies = [
@@ -6056,6 +6084,17 @@ dependencies = [
  "parity-scale-codec",
  "serde",
  "sp-debug-derive",
+ "sp-std",
+]
+
+[[package]]
+name = "sp-authority-discovery"
+version = "2.0.0-rc6"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-runtime",
  "sp-std",
 ]
 
