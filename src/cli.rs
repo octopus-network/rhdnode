@@ -19,8 +19,9 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub enum Subcommand {
-	#[structopt(flatten)]
-	Base(sc_cli::Subcommand),
+	//#[structopt(flatten)]
+	Base,
+	//Base(sc_cli::Subcommand),
 
 	#[structopt(name = "export-builtin-wasm", setting = structopt::clap::AppSettings::Hidden)]
 	ExportBuiltinWasm(ExportBuiltinWasmCommand),

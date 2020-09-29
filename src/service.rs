@@ -18,20 +18,21 @@
 
 use std::sync::Arc;
 use std::str::FromStr;
+//use futures::prelude::*;
 use futures::StreamExt;
+use futures::channel::mpsc::UnboundedReceiver;
 use codec::Encode;
-use sp_runtime::{Perbill, traits::Bounded};
+
+use sp_core::Pair;
+use sp_runtime::{Perbill, traits::{Bounded, Block as BlockT}};
 use sp_core::{H256, crypto::{UncheckedFrom, Ss58Codec, Ss58AddressFormat}};
 use sc_service::{error::{Error as ServiceError}, Configuration, TaskManager};
-use sc_executor::native_executor_instance;
-use sc_client_api::backend::RemoteBackend;
-use cdotnode_runtime::{self, opaque::Block, RuntimeApi};
-use futures::channel::mpsc::UnboundedReceiver;
+use sc_executor::{native_executor_instance};
+use sc_client_api::{backend::RemoteBackend, ExecutorProvider};
 use sc_consensus_bftml::{BftProposal, BftmlInnerMsg};
-use sp_core::Pair;
 use sc_network::{Event, NetworkService};
 
-pub use sc_executor::NativeExecutor;
+use cdotnode_runtime::{self, opaque::Block, RuntimeApi};
 
 // Our native executor instance.
 native_executor_instance!(
@@ -211,20 +212,20 @@ pub fn new_full(
 	let prometheus_registry = config.prometheus_registry().cloned();
 	let telemetry_connection_sinks = sc_service::TelemetryConnectionSinks::default();
 
-	let rpc_extensions_builder = {
-		let client = client.clone();
-		let pool = transaction_pool.clone();
-
-		Box::new(move |deny_unsafe, _| {
-			let deps = crate::rpc::FullDeps {
-				client: client.clone(),
-				pool: pool.clone(),
-				deny_unsafe,
-			};
-
-			crate::rpc::create_full(deps)
-		})
-	};
+//	let rpc_extensions_builder = {
+//		let client = client.clone();
+//		let pool = transaction_pool.clone();
+//
+//		Box::new(move |deny_unsafe, _| {
+//			let deps = crate::rpc::FullDeps {
+//				client: client.clone(),
+//				pool: pool.clone(),
+//				deny_unsafe,
+//			};
+//
+//			crate::rpc::create_full(deps)
+//		})
+//	};
 
 	sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		network: network.clone(),
@@ -233,7 +234,8 @@ pub fn new_full(
 		task_manager: &mut task_manager,
 		transaction_pool: transaction_pool.clone(),
 		telemetry_connection_sinks: telemetry_connection_sinks.clone(),
-		rpc_extensions_builder: rpc_extensions_builder,
+		//rpc_extensions_builder: rpc_extensions_builder,
+		rpc_extensions_builder: Box::new(|_, _| ()),
 		on_demand: None,
 		remote_blockchain: None,
 		backend, network_status_sinks, system_rpc_tx, config,
