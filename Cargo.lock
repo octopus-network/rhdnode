@@ -5150,6 +5150,7 @@ dependencies = [
  "futures 0.3.5",
  "log",
  "parity-scale-codec",
+ "parking_lot 0.10.2",
  "sc-block-builder",
  "sc-client-api",
  "sc-keystore",

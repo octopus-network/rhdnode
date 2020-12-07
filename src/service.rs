@@ -189,6 +189,9 @@ pub fn new_full(
 		inherent_data_providers, other: bftml_block_import,
 	}, imported_block_rx) = new_partial(&config, author, check_inherents_after, donate)?;
 
+    println!("==> Cdotnode: config.auth_num: {}", config.auth_num);
+    let auth_num = config.auth_num;
+
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
@@ -274,6 +277,8 @@ pub fn new_full(
 //
 //		task_manager.spawn_handle().spawn("authority-discovery-worker", authority_discovery_worker);
 
+
+
         // Main consensus service
         let proposer = sc_basic_authorship::ProposerFactory::new(
             client.clone(),
@@ -295,6 +300,7 @@ pub fn new_full(
             sp_consensus::AlwaysCanAuthor,
             // key,   // key
             // authorities, // authorities
+            auth_num,
             keystore.clone(),
             ).unwrap();
 
